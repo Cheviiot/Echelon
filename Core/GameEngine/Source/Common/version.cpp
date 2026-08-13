@@ -457,31 +457,28 @@ UnicodeString Version::buildUnicodeGitCommitTime()
 UnicodeString Version::getUnicodeProjectWatermark() const
 {
 	char finalCredit[256];
+	char versionSuffix[128] = "";
+
 	if (GitTag && GitTag[0] != '\0')
 	{
-		const char* prefix = "generalsx-";
 		const char* tagBase = GitTag;
-
-		if (strncmp(tagBase, prefix, strlen(prefix)) == 0)
+		if (strncmp(tagBase, "generalsx-", 10) == 0 || strncmp(tagBase, "GeneralsX-", 10) == 0)
 		{
-			tagBase += strlen(prefix);
+			tagBase += 10;
 		}
 
 		char formattedTag[128];
 		strncpy(formattedTag, tagBase, sizeof(formattedTag) - 1);
 		formattedTag[sizeof(formattedTag) - 1] = '\0';
-
 		if (formattedTag[0] != '\0')
 		{
 			formattedTag[0] = toupper((unsigned char)formattedTag[0]);
 		}
 
-		snprintf(finalCredit, sizeof(finalCredit), "GeneralsX %s - Multiplatform C&C Generals", formattedTag);
+		snprintf(versionSuffix, sizeof(versionSuffix), " - %s", formattedTag);
 	}
-	else
-	{
-		strncpy(finalCredit, "GeneralsX - Multiplatform C&C Generals", sizeof(finalCredit));
-	}
+
+	snprintf(finalCredit, sizeof(finalCredit), "GeneralsX - Cross Platform C&C Generals%s", versionSuffix);
 
 	UnicodeString watermark;
 	watermark.translate(finalCredit);
