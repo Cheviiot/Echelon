@@ -151,6 +151,7 @@ Docker is the recommended build method on Linux hosts to ensure all toolchain re
 - **SDL3 from source**: Fetched via CMake FetchContent. No system package needed.
 - **Manual memory**: Always delete/delete[]. Use STLPort for VC6 legacy builds.
 - **Debug options break replays**: Use `RTS_BUILD_OPTION_DEBUG=OFF` for replay tests.
+- **Windows executable icons (.ico)**: Windows builds embed `Generals/Code/Main/Generals.ico` and `GeneralsMD/Code/Main/Generals.ico` via `RTS.RC`. If source PNG icon assets (`assets/generalsx_icon.png` or `assets/generalsx-zh_icon.png`) are updated, regenerate the multi-resolution `.ico` files (sizes 16, 24, 32, 48, 64, 128, 256) to keep Windows executables in sync.
 
 ## Testing & Validation
 ### Smoke test
@@ -206,7 +207,7 @@ git merge thesuperhackers/main
 
 ## Git Commit Standards
 - **Conventional Commits**: Format must be `<type>(optional scope): <description>`. (e.g. `fix(audio): restart sound groups in reset`)
-- **DO NOT use `@`**: The commit message (both title and body) must never contain an `@` symbol. The `// GeneralsX @keyword` format is strictly for inline code annotations in C++ files. Do not append these signatures to commit messages.
+- **DO NOT use `@` in subject/type**: The commit subject/title must never contain an `@` symbol (e.g. no `@refactor:`). The `// GeneralsX @keyword` format is strictly for inline code annotations in C++ files and must not be appended to commit messages. Note that `@` is permitted in commit bodies/footers for mentions, emails, and `Co-authored-by` trailers.
 - **Imperative mood**: Use "add", "fix", "change" (not "added" or "fixes").
 - **Read the Docs**: For full details, valid types, and PR standards, you **MUST** read `.github/instructions/git-commit.instructions.md`.
 
@@ -216,7 +217,7 @@ git merge thesuperhackers/main
 - Primary labels: `[Linux]`, `[macOS]`, `[Linux] Pipeline: Build + Deploy + Run ZH`
 
 ## Docs Workflow
-1. Monthly diary in `docs/WORKLOG/YYYY-MM-DIARY.md` (YYYY=year, MM=month only, e.g., `2026-05-DIARY.md`)
+1. Monthly diary in `docs/WORKLOG/YYYY-MM-DIARY.md` (YYYY=year, MM=month only, e.g., `2026-05-DIARY.md`), always including the standard AI-generated content disclosure note at the top
 2. Active work notes in `docs/WORKDIR/` (phases/planning/reports/support/audit/lessons)
 3. Step-by-step tutorials in `docs/HOWTO/` (user-facing guides for common tasks)
 4. Never drop working docs directly under `docs/` root

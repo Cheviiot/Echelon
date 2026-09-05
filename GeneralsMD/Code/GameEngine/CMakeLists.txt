@@ -212,9 +212,9 @@ set(GAMEENGINE_SRC
 #    Include/GameClient/SelectionInfo.h
 #    Include/GameClient/SelectionXlat.h
     Include/GameClient/Shadow.h
-    Include/GameClient/Shell.h
-    Include/GameClient/ShellHooks.h
-    Include/GameClient/ShellMenuScheme.h
+#    Include/GameClient/Shell.h
+#    Include/GameClient/ShellHooks.h
+#    Include/GameClient/ShellMenuScheme.h
 #    Include/GameClient/Smudge.h
 #    Include/GameClient/Snow.h
 #    Include/GameClient/Statistics.h
@@ -784,8 +784,8 @@ set(GAMEENGINE_SRC
 #    Source/GameClient/GUI/IMEManager.cpp
 #    Source/GameClient/GUI/LoadScreen.cpp
 #    Source/GameClient/GUI/ProcessAnimateWindow.cpp
-    Source/GameClient/GUI/Shell/Shell.cpp
-    Source/GameClient/GUI/Shell/ShellMenuScheme.cpp
+#    Source/GameClient/GUI/Shell/Shell.cpp
+#    Source/GameClient/GUI/Shell/ShellMenuScheme.cpp
 #    Source/GameClient/GUI/WindowLayout.cpp
 #    Source/GameClient/GUI/WindowVideoManager.cpp
 #    Source/GameClient/GUI/WinInstanceData.cpp
@@ -1155,8 +1155,10 @@ target_sources(z_gameengine PRIVATE ${GAMEENGINE_SRC})
 
 target_include_directories(z_gameengine PUBLIC
     Include
-    ../CompatLib/Include  # Needed for d3dx8math.h in PCH
 )
+if(UNIX)
+    target_include_directories(z_gameengine PUBLIC ../CompatLib/Include)
+endif()
 
 # Ensure DXVK headers are available when building on Linux
 if(NOT SAGE_USE_DX8 AND dxvk_SOURCE_DIR)

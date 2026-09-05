@@ -857,29 +857,42 @@ StateReturnType AIStateMachine::updateStateMachine()
 	#endif
 	//end -extraLogging
 
+	RefCountPtr<StateMachine> refThis = Create_Add_Ref(this);
 	if (m_temporaryState)
 	{
-		// execute this state
-		StateReturnType status = m_temporaryState->update();
-		if (m_temporaryStateFramEnd < TheGameLogic->getFrame()) {
-			// ran out of time.
-			if (status == STATE_CONTINUE) {
-				status = STATE_SUCCESS;
-			}
-		}
-		if (status==STATE_CONTINUE)
-		{
-			//-extraLogging
-			#if defined(RTS_DEBUG)
-				if( !idle && TheGlobalData->m_extraLogging )
-					DEBUG_LOG( (" - RETURN EARLY STATE_CONTINUE") );
-			#endif
-			//end -extraLogging
+		State *temporaryState = m_temporaryState;
 
-			return status;
+		// execute this state
+		StateReturnType status = temporaryState->update();
+		// GeneralsX @bugfix kohmaeda 22/08/2026 Do not clean up a temporary state that changed during its update.
+		// Reported with fix direction: https://github.com/fbraz3/GeneralsX/issues/265
+		if (m_temporaryState != temporaryState)
+		{
+			if (m_temporaryState != nullptr)
+				return STATE_CONTINUE;
 		}
-		m_temporaryState->onExit(EXIT_NORMAL);
-		m_temporaryState = nullptr;
+		else
+		{
+			if (m_temporaryStateFramEnd < TheGameLogic->getFrame()) {
+				// ran out of time.
+				if (status == STATE_CONTINUE) {
+					status = STATE_SUCCESS;
+				}
+			}
+			if (status==STATE_CONTINUE)
+			{
+				//-extraLogging
+				#if defined(RTS_DEBUG)
+					if( !idle && TheGlobalData->m_extraLogging )
+						DEBUG_LOG( (" - RETURN EARLY STATE_CONTINUE") );
+				#endif
+				//end -extraLogging
+
+				return status;
+			}
+			temporaryState->onExit(EXIT_NORMAL);
+			m_temporaryState = nullptr;
+		}
 	}
 	StateReturnType retType = StateMachine::updateStateMachine();
 
@@ -1020,6 +1033,13 @@ void AIStateMachine::clear()
 	m_goalPath.clear();
 	m_goalWaypoint = nullptr;
 	m_goalSquad = nullptr;
+
+#if !RETAIL_COMPATIBLE_CRC
+	if (m_temporaryState)
+		m_temporaryState->onExit(EXIT_RESET);
+
+	m_temporaryState = nullptr;
+#endif
 
 	AIUpdateInterface* ai = getOwner()->getAI();
 	if (ai)

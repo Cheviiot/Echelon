@@ -368,6 +368,13 @@ void OpenContain::addToContain( Object *rider )
 }
 
 //-------------------------------------------------------------------------------------------------
+// GeneralsX @bugfix Stubbjax 28/08/2026 Import authoritative containment checks for selection.
+// Upstream PR: https://github.com/TheSuperHackers/GeneralsGameCode/pull/3125
+Bool OpenContain::isContained( const Object *obj ) const
+{
+	return obj->getContainedBy() == getObject();
+}
+
 //-------------------------------------------------------------------------------------------------
 void OpenContain::addToContainList( Object *rider )
 {
@@ -672,6 +679,9 @@ void OpenContain::scatterToNearbyPosition(Object* rider)
 		// set position of the object at center of building and move them toward pos
 		rider->setPosition( theContainer->getPosition() );
 		ai->ignoreObstacle(theContainer);
+#if !RETAIL_COMPATIBLE_CRC
+		ai->friend_setGoalObject(nullptr);
+#endif
 		ai->aiMoveToPosition( &pos, CMD_FROM_AI );
 
 	}

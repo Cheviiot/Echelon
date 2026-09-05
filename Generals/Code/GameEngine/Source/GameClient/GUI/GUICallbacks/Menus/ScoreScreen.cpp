@@ -74,6 +74,7 @@
 #include "GameLogic/VictoryConditions.h"
 #include "GameClient/Display.h"
 #include "GameClient/GUICallbacks.h"
+#include "GameClient/SaveLoadFeedback.h"
 #include "GameClient/WindowLayout.h"
 #include "GameClient/GameWindowManager.h"
 #include "GameClient/Gadget.h"
@@ -174,14 +175,20 @@ void populateSideInfo( UnicodeString side,ScoreGather *sg, Int pos, Color color)
 
 void startNextCampaignGame()
 {
-	TheShell->popImmediate();
-	TheShell->hideShell();
+	// GeneralsX @bugfix arazmj 27/08/2026 Queue the next campaign mission before tearing down the score screen.
 	TheWritableGlobalData->m_pendingFile = TheCampaignManager->getCurrentMap();
-	// send a message to the logic for a new game
+
+	// Shell teardown can initialize an uncovered menu and queue GAME_SHELL, so queue the campaign first.
 	GameMessage *msg = TheMessageStream->appendMessage( GameMessage::MSG_NEW_GAME );
 	msg->appendIntegerArgument(GAME_SINGLE_PLAYER);
 	msg->appendIntegerArgument(TheCampaignManager->getGameDifficulty());
 	msg->appendIntegerArgument(TheCampaignManager->getRankPoints());
+
+	TheShell->popImmediate();
+	TheShell->hideShell();
+
+	// An uncovered menu can also replace the pending file with the shell map during teardown.
+	TheWritableGlobalData->m_pendingFile = TheCampaignManager->getCurrentMap();
 
 	InitRandom(0);
 }
@@ -767,7 +774,7 @@ void finishSinglePlayerInit()
 			GadgetButtonSetText(buttonContinue, TheGameText->fetch("GUI:SaveAndContinue"));
 
 			// auto save game
-			TheGameState->missionSave();
+			presentSaveResult( TheGameState->missionSave() );
 			if(staticTextGameSaved)
 				staticTextGameSaved->winHide(FALSE);
 		}
@@ -1775,15 +1782,13 @@ void grabMultiPlayerInfo()
 	typedef ScoreMap::reverse_iterator RevScoreMapIt;
 
 	Int playerCount = 0;
-	AsciiString playerName;
-	Player *player;
 	ScoreMap scores;
 	ScoreMapIt it;
 	scores.clear();
 	Int adder = 1; // Varible used to add on an offset to the score to make sure we don't add people to the same map
 
-	player = ThePlayerList->getLocalPlayer();
-	if (player)
+	Player *localPlayer = ThePlayerList->getLocalPlayer();
+	if (localPlayer)
 	{
 		const Image *image = TheMappedImageCollection->findImageByName("MutiPlayer_ScoreScreen");
 		if(image)
@@ -1796,8 +1801,7 @@ void grabMultiPlayerInfo()
 	// Add each player and score to the map. THis allows us to sort the players based on score.
 	for( Int i = 0; i < MAX_SLOTS; ++i)
 	{
-		playerName.format("player%d",i);
-		player = ThePlayerList->findPlayerWithNameKey(TheNameKeyGenerator->nameToKey(playerName));
+		Player *player = ThePlayerList->getPlayerFromSlotIndex(i);
 		if(player)
 		{
 			Int score = player->getScoreKeeper()->calculateScore();

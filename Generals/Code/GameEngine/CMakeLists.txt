@@ -205,9 +205,9 @@ set(GAMEENGINE_SRC
 #    Include/GameClient/SelectionInfo.h
 #    Include/GameClient/SelectionXlat.h
     Include/GameClient/Shadow.h
-    Include/GameClient/Shell.h
-    Include/GameClient/ShellHooks.h
-    Include/GameClient/ShellMenuScheme.h
+#    Include/GameClient/Shell.h
+#    Include/GameClient/ShellHooks.h
+#    Include/GameClient/ShellMenuScheme.h
 #    Include/GameClient/Statistics.h
 #    Include/GameClient/TerrainRoads.h
 #    Include/GameClient/TerrainVisual.h
@@ -741,8 +741,8 @@ set(GAMEENGINE_SRC
 #    Source/GameClient/GUI/IMEManager.cpp
 #    Source/GameClient/GUI/LoadScreen.cpp
 #    Source/GameClient/GUI/ProcessAnimateWindow.cpp
-    Source/GameClient/GUI/Shell/Shell.cpp
-    Source/GameClient/GUI/Shell/ShellMenuScheme.cpp
+#    Source/GameClient/GUI/Shell/Shell.cpp
+#    Source/GameClient/GUI/Shell/ShellMenuScheme.cpp
 #    Source/GameClient/GUI/WindowLayout.cpp
 #    Source/GameClient/GUI/WindowVideoManager.cpp
 #    Source/GameClient/GUI/WinInstanceData.cpp
@@ -1079,6 +1079,17 @@ target_sources(g_gameengine PRIVATE ${GAMEENGINE_SRC})
 target_include_directories(g_gameengine PUBLIC
     Include
 )
+if(UNIX)
+    target_include_directories(g_gameengine PUBLIC ../CompatLib/Include)
+endif()
+
+# Ensure DXVK headers are available when building on Linux
+if(NOT SAGE_USE_DX8 AND dxvk_SOURCE_DIR)
+    target_include_directories(g_gameengine PUBLIC
+        ${dxvk_SOURCE_DIR}/usr/include
+        ${dxvk_SOURCE_DIR}/usr/include/dxvk
+    )
+endif()
 
 target_include_directories(g_gameengine PRIVATE
     Include/Precompiled
@@ -1106,6 +1117,7 @@ target_link_libraries(g_gameengine PRIVATE
 target_link_libraries(g_gameengine PUBLIC
     corei_gameengine_public
     g_wwvegas
+    d3d8lib  # Ensure DirectX8 headers available (Windows SDK or DXVK)
 )
 
 target_precompile_headers(g_gameengine PRIVATE
