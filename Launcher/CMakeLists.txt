@@ -27,6 +27,10 @@ add_executable(echelon_settings_tests EXCLUDE_FROM_ALL
 
 target_compile_definitions(echelon_settings_tests PRIVATE ECHELON_ENGINE_HOSTED=1)
 
+# Echelon @build Codex 05/09/2026 Declare filesystem requirements on both product targets, independently of engine directory settings.
+target_compile_features(echelon_launcher PRIVATE cxx_std_17)
+target_compile_features(echelon_settings_tests PRIVATE cxx_std_17)
+
 target_link_libraries(echelon_settings_tests PRIVATE
     echelon_brand
     sdl3lib

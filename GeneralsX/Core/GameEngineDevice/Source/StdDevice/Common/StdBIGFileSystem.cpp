@@ -522,7 +522,8 @@ void StdBIGFileSystem::init() {
 	for (const EchelonContentRuntime::ContentLayer &layer : EchelonContentRuntime::Layers()) {
 		std::vector<std::filesystem::path> archives;
 		std::error_code layerError;
-		for (std::filesystem::directory_iterator iterator(layer.rootPath,
+		// Echelon @bugfix Codex 05/09/2026 Discover validated nested BIG/GIB content without following directory symlinks.
+		for (std::filesystem::recursive_directory_iterator iterator(layer.rootPath,
 			std::filesystem::directory_options::skip_permission_denied, layerError), end;
 			!layerError && iterator != end; iterator.increment(layerError)) {
 			std::string extension = iterator->path().extension().string();
@@ -602,7 +603,7 @@ ArchiveFile * StdBIGFileSystem::openArchiveFile(const Char *filename) {
 	}
 
 	AsciiString asciibuf;
-	char buffer[_MAX_PATH];
+	char buffer[EchelonArchivePolicy::kMaximumEntryPathBytes + 1];
 	fp->read(buffer, 4); // read the "BIG" at the beginning of the file.
 	buffer[4] = 0;
 	if (strcmp(buffer, BIGFileIdentifier) != 0) {
@@ -650,11 +651,18 @@ ArchiveFile * StdBIGFileSystem::openArchiveFile(const Char *filename) {
 		fileInfo->m_offset = fileOffset;
 		fileInfo->m_size = filesize;
 
-		// read in the path name of the file.
+		// Echelon @bugfix Codex 05/09/2026 Bound filename reads even when an archive bypasses launcher validation.
 		Int pathIndex = -1;
 		do {
 			++pathIndex;
-			fp->read(buffer + pathIndex, 1);
+			if (static_cast<size_t>(pathIndex) >= sizeof(buffer) || fp->read(buffer + pathIndex, 1) != 1) {
+				fprintf(stderr, "[BIG] Rejected unterminated or oversized entry in %s\n", filename);
+				fflush(stderr);
+				delete fileInfo;
+				delete archiveFile;
+				fp->close();
+				return nullptr;
+			}
 		} while (buffer[pathIndex] != 0);
 
 		Int filenameIndex = pathIndex;

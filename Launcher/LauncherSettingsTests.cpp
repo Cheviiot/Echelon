@@ -680,6 +680,17 @@ int main()
 	importRequest.displayName = "Malformed BIG";
 	Check(!ImportLocalModification(importRequest).success,
 		"local import must reject malformed BIG files before the legacy engine parser can see them");
+	const fs::path longPathBig = testRoot / "LongPath.big";
+	for (size_t length : {EchelonArchivePolicy::kMaximumEntryPathBytes,
+		EchelonArchivePolicy::kMaximumEntryPathBytes + 1, size_t(4095)}) {
+		Check(CreateBigFixture(longPathBig, std::string(length - 4, 'x') + ".txt", "boundary-content"),
+			"BIG path-length boundary fixture must be created");
+		importRequest.inputPath = longPathBig;
+		importRequest.displayName = "BIG Path " + std::to_string(length);
+		Check(ImportLocalModification(importRequest).success ==
+			(length == EchelonArchivePolicy::kMaximumEntryPathBytes),
+			"BIG imports must allow the engine boundary and reject oversized names before publication");
+	}
 	const fs::path invalidTrailerFolder = testRoot / "InvalidTrailerImport";
 	fs::create_directories(invalidTrailerFolder, error);
 	Check(CreatePaddedBigFixture(invalidTrailerFolder / "InvalidTrailer.big",

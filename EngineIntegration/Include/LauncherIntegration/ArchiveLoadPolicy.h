@@ -16,6 +16,9 @@
 namespace EchelonArchivePolicy
 {
 
+// Echelon @bugfix Codex 05/09/2026 Share the native engine's BIG path capacity with import validation; exclude the terminator.
+constexpr size_t kMaximumEntryPathBytes = 1023;
+
 inline char LowerAscii(char character)
 {
 	return character >= 'A' && character <= 'Z' ? static_cast<char>(character - 'A' + 'a') : character;

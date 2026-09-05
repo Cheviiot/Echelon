@@ -73,11 +73,20 @@ PY
 	python3 - "${layer_root}" "${engine}" "${type}" "${id}" "${parent_id}" <<'PY'
 import hashlib
 import pathlib
+import struct
 import sys
 
 root = pathlib.Path(sys.argv[1])
 engine, kind, identity, parent = sys.argv[2:]
 content = root / "content"
+# Exercise nested archive discovery as well as duplicate precedence at the layer root.
+name = b"Data/EchelonQA/Nested.txt\0"
+payload = b"nested-content\n"
+offset = 16 + 8 + len(name)
+nested = content / "Data" / "Archives" / "Nested.GIB"
+nested.parent.mkdir(parents=True)
+nested.write_bytes(b"BIGF" + struct.pack("<I", offset + len(payload)) +
+                   struct.pack(">IIII", 1, offset, offset, len(payload)) + name + payload)
 entries = []
 for path in sorted((p for p in content.rglob("*") if p.is_file()), key=lambda p: p.relative_to(content).as_posix()):
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -122,8 +131,8 @@ run_stack() {
 		echo "ERROR: ${profile} mounted layers in the wrong order: ${observed}" >&2
 		exit 1
 	fi
-	if [[ "$(rg -c '\[CONTENT-LAYER\].*big=loaded archives=2 files=2 precedence=verified' "${log_file}")" -ne 4 ]]; then
-		echo "ERROR: ${profile} did not preserve duplicate BIG priority inside every managed layer" >&2
+	if [[ "$(rg -c '\[CONTENT-LAYER\].*big=loaded archives=3 files=3 precedence=verified' "${log_file}")" -ne 4 ]]; then
+		echo "ERROR: ${profile} did not mount nested BIG/GIB content with correct archive priority" >&2
 		exit 1
 	fi
 	if ! rg -q 'engine quiescence flags: 0x0000007f' "${log_file}"; then
@@ -134,6 +143,36 @@ run_stack() {
 
 run_stack generals
 run_stack zerohour
+
+# Legacy -mod bypasses import validation: exercise the engine's own filename bounds.
+python3 - "${qa_root}" <<'PY'
+import pathlib
+import struct
+import sys
+
+root = pathlib.Path(sys.argv[1])
+for kind, name in (("oversized", b"x" * 4095 + b"\0"), ("unterminated", b"x" * 64)):
+    size = 16 + 8 + len(name)
+    (root / (kind + ".big")).write_bytes(
+        b"BIGF" + struct.pack("<I", size) + struct.pack(">IIII", 1, size, size, 0) + name)
+PY
+for profile in generals zerohour; do
+	for kind in oversized unterminated; do
+		guard_log="${qa_root}/${profile}-${kind}.log"
+		env -u DISPLAY -u WAYLAND_DISPLAY HOME="${qa_home}" SDL_AUDIODRIVER=dummy \
+			DBUS_SESSION_BUS_ADDRESS=unix:path=/dev/null \
+			LD_LIBRARY_PATH="${dxvk_dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+			timeout 180s "${launcher}" --profile="${profile}" --no-mods \
+			-mod "${qa_root}/${kind}.big" -headless --internal-test-return-after-updates=1 \
+			>"${guard_log}" 2>&1
+		if ! rg -q '\[BIG\] Rejected unterminated or oversized entry' "${guard_log}" ||
+			! rg -q 'engine quiescence flags: 0x0000007f' "${guard_log}"; then
+			echo "ERROR: ${profile} did not safely reject the ${kind} BIG entry" >&2
+			tail -n 80 "${guard_log}" >&2
+			exit 1
+		fi
+	done
+done
 
 printf 'tampered\n' >>"${echelon_root}/Mods/Installed/generals/mod/mod/1.0/content/Data/EchelonQA/Precedence.txt"
 tamper_log="${qa_root}/tamper.log"
@@ -165,5 +204,5 @@ if ! rg -qi 'cannot be combined' "${conflict_log}"; then
 	exit 1
 fi
 
-echo "PASS: Verified mod, patch, and ordered addon layers mounted and released in both engines"
+echo "PASS: Nested archives, layer precedence, and BIG filename bounds verified in both engines"
 echo "INFO: Logs and fixtures: ${qa_root}"

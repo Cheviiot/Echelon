@@ -9,6 +9,7 @@
 */
 
 #include "LauncherInstaller.h"
+#include "LauncherIntegration/ArchiveLoadPolicy.h"
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -203,7 +204,8 @@ bool ValidateBigArchive(const fs::path &path, std::string &errorMessage)
 		std::string name;
 		for (;;) {
 			const std::streamoff position = input.tellg();
-			if (position < 0 || position >= directoryEnd || name.size() >= 4096) {
+			if (position < 0 || position >= directoryEnd ||
+				name.size() > EchelonArchivePolicy::kMaximumEntryPathBytes) {
 				errorMessage = "BIG archive contains an invalid filename: " + path.filename().string();
 				return false;
 			}
