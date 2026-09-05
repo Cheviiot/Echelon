@@ -11,6 +11,7 @@
 #include "LauncherIntegration/BrandIdentity.h"
 #include "LauncherIntegration/EngineModuleAPI.h"
 #include "LauncherInstaller.h"
+#include "LauncherDataImport.h"
 #include "LauncherModProfiles.h"
 #include "LauncherMods.h"
 #include "LauncherSettings.h"
@@ -116,12 +117,6 @@ struct MigrationResult
 {
 	bool success = false;
 	std::string message;
-};
-
-struct TreeStats
-{
-	uintmax_t files = 0;
-	uintmax_t bytes = 0;
 };
 
 struct LoadedModule
@@ -240,270 +235,6 @@ std::string Timestamp()
 	char buffer[32] = {};
 	std::strftime(buffer, sizeof(buffer), "%Y%m%d-%H%M%S", &tmValue);
 	return buffer;
-}
-
-void AppendJournal(const fs::path &journalPath, const std::string &message)
-{
-	std::error_code error;
-	fs::create_directories(journalPath.parent_path(), error);
-	std::ofstream output(journalPath, std::ios::app);
-	if (output) {
-		output << Timestamp() << " " << message << '\n';
-	}
-}
-
-TreeStats CollectTreeStats(const fs::path &root)
-{
-	TreeStats stats;
-	std::error_code error;
-	if (!fs::exists(root, error)) {
-		return stats;
-	}
-	for (const fs::directory_entry &entry : fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, error)) {
-		if (error) {
-			break;
-		}
-		if (entry.is_regular_file(error)) {
-			++stats.files;
-			stats.bytes += entry.file_size(error);
-		}
-	}
-	return stats;
-}
-
-bool FilesEqual(const fs::path &left, const fs::path &right)
-{
-	std::error_code error;
-	if (fs::file_size(left, error) != fs::file_size(right, error) || error) {
-		return false;
-	}
-	std::ifstream leftFile(left, std::ios::binary);
-	std::ifstream rightFile(right, std::ios::binary);
-	if (!leftFile || !rightFile) {
-		return false;
-	}
-	constexpr size_t kBufferSize = 1024 * 1024;
-	std::vector<char> leftBuffer(kBufferSize);
-	std::vector<char> rightBuffer(kBufferSize);
-	while (leftFile && rightFile) {
-		leftFile.read(leftBuffer.data(), static_cast<std::streamsize>(leftBuffer.size()));
-		rightFile.read(rightBuffer.data(), static_cast<std::streamsize>(rightBuffer.size()));
-		const std::streamsize leftCount = leftFile.gcount();
-		const std::streamsize rightCount = rightFile.gcount();
-		if (leftCount != rightCount || !std::equal(leftBuffer.begin(), leftBuffer.begin() + leftCount, rightBuffer.begin())) {
-			return false;
-		}
-	}
-	return true;
-}
-
-bool CopyTree(const fs::path &source, const fs::path &destination, std::string &errorMessage)
-{
-	std::error_code error;
-	fs::create_directories(destination, error);
-	if (error) {
-		errorMessage = "Cannot create migration staging directory: " + error.message();
-		return false;
-	}
-
-	for (const fs::directory_entry &entry : fs::recursive_directory_iterator(source, fs::directory_options::skip_permission_denied, error)) {
-		if (error) {
-			errorMessage = "Cannot enumerate source data: " + error.message();
-			return false;
-		}
-		const fs::path relative = fs::relative(entry.path(), source, error);
-		if (error) {
-			errorMessage = "Cannot calculate migration path: " + error.message();
-			return false;
-		}
-		const fs::path target = destination / relative;
-		if (entry.is_symlink(error)) {
-			fs::create_directories(target.parent_path(), error);
-			fs::copy(entry.path(), target, fs::copy_options::copy_symlinks, error);
-		} else if (entry.is_directory(error)) {
-			fs::create_directories(target, error);
-		} else if (entry.is_regular_file(error)) {
-			fs::create_directories(target.parent_path(), error);
-			if (!error) {
-				fs::copy_file(entry.path(), target, fs::copy_options::overwrite_existing, error);
-			}
-		}
-		if (error) {
-			errorMessage = "Cannot copy " + entry.path().string() + ": " + error.message();
-			return false;
-		}
-	}
-	return true;
-}
-
-bool MoveTreeVerified(const fs::path &source, const fs::path &destination, const fs::path &journal, std::string &errorMessage)
-{
-	std::error_code error;
-	fs::create_directories(destination.parent_path(), error);
-	if (error) {
-		errorMessage = error.message();
-		return false;
-	}
-
-	fs::rename(source, destination, error);
-	if (!error) {
-		AppendJournal(journal, "atomic rename " + source.string() + " -> " + destination.string());
-		return true;
-	}
-
-	const fs::path staging = destination.string() + ".migrating";
-	if (fs::exists(staging, error)) {
-		fs::remove_all(staging, error);
-		if (error) {
-			errorMessage = "Cannot clear incomplete migration staging data: " + error.message();
-			return false;
-		}
-	}
-
-	AppendJournal(journal, "cross-filesystem copy started " + source.string() + " -> " + staging.string());
-	if (!CopyTree(source, staging, errorMessage)) {
-		AppendJournal(journal, "copy failed: " + errorMessage);
-		return false;
-	}
-
-	const TreeStats sourceStats = CollectTreeStats(source);
-	const TreeStats stagingStats = CollectTreeStats(staging);
-	if (sourceStats.files != stagingStats.files || sourceStats.bytes != stagingStats.bytes) {
-		errorMessage = "Copied data verification failed";
-		AppendJournal(journal, errorMessage);
-		return false;
-	}
-
-	error.clear();
-	fs::rename(staging, destination, error);
-	if (error) {
-		errorMessage = "Cannot publish migrated data: " + error.message();
-		return false;
-	}
-	const TreeStats destinationStats = CollectTreeStats(destination);
-	if (sourceStats.files != destinationStats.files || sourceStats.bytes != destinationStats.bytes) {
-		errorMessage = "Published data verification failed; source was preserved";
-		return false;
-	}
-
-	fs::remove_all(source, error);
-	if (error) {
-		errorMessage = "Migration completed, but the old directory could not be removed: " + error.message();
-		AppendJournal(journal, errorMessage);
-		return true;
-	}
-	AppendJournal(journal, "cross-filesystem migration verified and source removed");
-	return true;
-}
-
-bool MoveFileVerified(const fs::path &source, const fs::path &destination, std::string &errorMessage)
-{
-	std::error_code error;
-	fs::create_directories(destination.parent_path(), error);
-	if (error) {
-		errorMessage = error.message();
-		return false;
-	}
-	fs::rename(source, destination, error);
-	if (!error) {
-		return true;
-	}
-	error.clear();
-	if (fs::is_symlink(source, error)) {
-		fs::copy(source, destination, fs::copy_options::copy_symlinks, error);
-		if (error) {
-			errorMessage = error.message();
-			return false;
-		}
-		const fs::path sourceTarget = fs::read_symlink(source, error);
-		if (error) {
-			errorMessage = error.message();
-			return false;
-		}
-		const fs::path destinationTarget = fs::read_symlink(destination, error);
-		if (error || sourceTarget != destinationTarget) {
-			errorMessage = error ? error.message() : "Symbolic link verification failed";
-			return false;
-		}
-	} else {
-		fs::copy_file(source, destination, fs::copy_options::overwrite_existing, error);
-		if (error || !FilesEqual(source, destination)) {
-			errorMessage = error ? error.message() : "File verification failed";
-			return false;
-		}
-	}
-	fs::remove(source, error);
-	if (error) {
-		errorMessage = "Copied data was verified, but the source could not be removed: " + error.message();
-		return false;
-	}
-	return true;
-}
-
-bool MergeTree(const fs::path &source, const fs::path &destination, const fs::path &backupRoot,
-	const fs::path &journal, std::string &errorMessage)
-{
-	std::error_code error;
-	if (!fs::exists(source, error)) {
-		return true;
-	}
-	fs::create_directories(destination, error);
-	if (error) {
-		errorMessage = error.message();
-		return false;
-	}
-
-	std::vector<fs::path> entries;
-	for (const fs::directory_entry &entry : fs::recursive_directory_iterator(source, fs::directory_options::skip_permission_denied, error)) {
-		if (error) {
-			errorMessage = error.message();
-			return false;
-		}
-		entries.push_back(entry.path());
-	}
-	std::sort(entries.begin(), entries.end(), [](const fs::path &left, const fs::path &right) {
-		return left.native().size() < right.native().size();
-	});
-
-	for (const fs::path &entry : entries) {
-		const fs::path relative = fs::relative(entry, source, error);
-		const fs::path target = destination / relative;
-		if (fs::is_directory(entry, error)) {
-			fs::create_directories(target, error);
-			continue;
-		}
-		if (!fs::is_regular_file(entry, error) && !fs::is_symlink(entry, error)) {
-			continue;
-		}
-
-		if (!fs::exists(target, error)) {
-			if (!MoveFileVerified(entry, target, errorMessage)) {
-				return false;
-			}
-			AppendJournal(journal, "moved " + entry.string() + " -> " + target.string());
-		} else if (fs::is_regular_file(entry, error) && fs::is_regular_file(target, error) && FilesEqual(entry, target)) {
-			fs::remove(entry, error);
-			AppendJournal(journal, "removed identical source file " + entry.string());
-		} else {
-			const fs::path backup = backupRoot / relative;
-			if (!MoveFileVerified(entry, backup, errorMessage)) {
-				return false;
-			}
-			AppendJournal(journal, "preserved conflict " + entry.string() + " -> " + backup.string());
-		}
-	}
-
-	std::sort(entries.begin(), entries.end(), [](const fs::path &left, const fs::path &right) {
-		return left.native().size() > right.native().size();
-	});
-	for (const fs::path &entry : entries) {
-		if (fs::is_directory(entry, error)) {
-			fs::remove(entry, error);
-			error.clear();
-		}
-	}
-	fs::remove(source, error);
-	return true;
 }
 
 void WriteProfileIfMissing(const fs::path &path, const std::string &contents)
@@ -641,13 +372,13 @@ MigrationResult ImportSelectedData(const LauncherPaths &paths, const fs::path &s
 	const fs::path journal = paths.launcherData / "migration.log";
 	const fs::path backup = paths.root / "MigrationBackup" / Timestamp();
 	if (!generalsSource.empty() && !fs::equivalent(generalsSource, paths.root / "Generals", error)) {
-		if (!MergeTree(generalsSource, paths.root / "Generals", backup / "Generals", journal, errorMessage)) {
+		if (!EchelonLauncher::CopyRetailDataTree(generalsSource, paths.root / "Generals", backup / "Generals", journal, errorMessage)) {
 			return {false, errorMessage};
 		}
 	}
 	error.clear();
 	if (!zeroHourSource.empty() && !fs::equivalent(zeroHourSource, paths.root / "GeneralsZH", error)) {
-		if (!MergeTree(zeroHourSource, paths.root / "GeneralsZH", backup / "GeneralsZH", journal, errorMessage)) {
+		if (!EchelonLauncher::CopyRetailDataTree(zeroHourSource, paths.root / "GeneralsZH", backup / "GeneralsZH", journal, errorMessage)) {
 			return {false, errorMessage};
 		}
 	}

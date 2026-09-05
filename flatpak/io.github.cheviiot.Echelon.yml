@@ -75,7 +75,7 @@ modules:
       - cmake --build build-flatpak --target echelon_launcher -j "${FLATPAK_BUILDER_N_JOBS:-4}"
       - cmake --build build-flatpak --target echelon_settings_tests -j "${FLATPAK_BUILDER_N_JOBS:-4}"
       - build-flatpak/Launcher/echelon_settings_tests
-      - cmake --build build-flatpak --target sage_patch -j "${FLATPAK_BUILDER_N_JOBS:-4}" || true
+      - cmake --build build-flatpak --target sage_patch -j "${FLATPAK_BUILDER_N_JOBS:-4}"
       - install -Dm755 build-flatpak/Echelon/Echelon /app/bin/Echelon
       - install -Dm755 build-flatpak/Echelon/libEchelonGeneralsEngine.so /app/lib/echelon/libEchelonGeneralsEngine.so
       - install -Dm755 build-flatpak/Echelon/libEchelonZeroHourEngine.so /app/lib/echelon/libEchelonZeroHourEngine.so

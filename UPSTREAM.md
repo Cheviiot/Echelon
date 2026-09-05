@@ -22,4 +22,4 @@ Use [the sync guide](docs/HOWTO/SYNC_GENERALSX_UPSTREAM.md) for subsequent merge
 
 GitHub protection locks the mirror against pushes, including administrator pushes, and disallows force pushes and deletion. Fork syncing is allowed; every refresh must retain an exact original commit SHA and fast-forward history. Never merge `main` or a product PR into this branch.
 
-The owner paused foundation PR #1 while establishing this arrangement. Its temporary `codex/echelon-foundation` branch remains pending; creating the clean mirror does not merge the product into `main`.
+The owner approved this arrangement and authorized foundation PR #1 to merge into product `main`. The temporary `codex/echelon-foundation` branch is used only until the reviewed integration completes. The clean mirror is never a product merge target.

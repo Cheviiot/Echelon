@@ -53,8 +53,10 @@ set_target_properties(sage_patch PROPERTIES
 
 target_include_directories(sage_patch PRIVATE
     include
-    ${GENERALSX_BINARY_DIR}/_deps/sdl3-src/include
 )
+# Echelon @build Codex 05/09/2026 Follow SDL's exported header paths after source relocation.
+# The headers-only target preserves macOS runtime symbol lookup without linking SDL.
+target_link_libraries(sage_patch PRIVATE SDL3::Headers)
 
 # SDL3 symbols resolve at load time from the host process — do not link the
 # dylib at build time so a wrong RPATH cannot pull in a stale SDL3.

@@ -1,6 +1,7 @@
 # Echelon @build Codex 12/08/2026 Universal SDL3 launcher host for both engine modules.
 add_executable(echelon_launcher
     LauncherMain.cpp
+    LauncherDataImport.cpp
     ${ECHELON_SOURCE_DIR}/EngineIntegration/Source/ProcessAllocator.cpp
     LauncherInstaller.cpp
 	LauncherLocalization.cpp
@@ -13,6 +14,7 @@ add_executable(echelon_launcher
 add_executable(echelon_settings_tests EXCLUDE_FROM_ALL
     ${ECHELON_SOURCE_DIR}/EngineIntegration/Source/ContentLayerRuntime.cpp
     LauncherSettingsTests.cpp
+    LauncherDataImport.cpp
     LauncherDownloads.cpp
     LauncherInstaller.cpp
 	LauncherLocalization.cpp
@@ -66,6 +68,9 @@ set_target_properties(echelon_launcher PROPERTIES
 )
 
 add_dependencies(echelon_launcher g_generals_module z_generals_module)
+if(TARGET sage_patch)
+    add_dependencies(echelon_launcher sage_patch)
+endif()
 
 add_custom_command(TARGET echelon_launcher POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different

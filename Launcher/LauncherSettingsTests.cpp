@@ -11,6 +11,7 @@
 #include "LauncherSettings.h"
 #include "LauncherDownloads.h"
 #include "LauncherInstaller.h"
+#include "LauncherDataImport.h"
 #include "LauncherLocalization.h"
 #include "LauncherModProfiles.h"
 #include "LauncherMods.h"
@@ -192,6 +193,45 @@ int main()
 	}
 
 	std::string message;
+	// Echelon @bugfix Codex 05/09/2026 Retail imports preserve original files, duplicates, conflicts and links.
+	const fs::path retailSource = testRoot / "RetailSource";
+	const fs::path retailDestination = testRoot / "RetailCopy";
+	const fs::path retailBackup = testRoot / "RetailBackup";
+	fs::create_directories(retailSource / "Data", error);
+	fs::create_directories(retailDestination / "Data", error);
+	std::ofstream(retailSource / "INI.big") << "original ini";
+	std::ofstream(retailSource / "Fresh.big") << "original fresh";
+	std::ofstream(retailSource / "Data/Conflict.ini") << "incoming content";
+	std::ofstream(retailDestination / "INI.big") << "original ini";
+	std::ofstream(retailDestination / "Data/Conflict.ini") << "existing content";
+	fs::create_symlink("Fresh.big", retailSource / "Alias.big", error);
+	Check(!error, "retail file symlink fixture must be created");
+	Check(CopyRetailDataTree(retailSource, retailDestination, retailBackup, testRoot / "import.log", message),
+		"retail data must copy into the product tree");
+	Check(ReadFile(retailSource / "INI.big") == "original ini" &&
+		ReadFile(retailSource / "Fresh.big") == "original fresh" &&
+		ReadFile(retailSource / "Data/Conflict.ini") == "incoming content" &&
+		fs::is_symlink(retailSource / "Alias.big"),
+		"import must leave new, identical, conflicting and linked source files untouched");
+	Check(ReadFile(retailDestination / "Fresh.big") == "original fresh" &&
+		ReadFile(retailDestination / "Alias.big") == "original fresh" &&
+		!fs::is_symlink(retailDestination / "Alias.big"),
+		"import must create independent file copies, including file symlink contents");
+	Check(ReadFile(retailDestination / "Data/Conflict.ini") == "existing content" &&
+		ReadFile(retailBackup / "Data/Conflict.ini") == "incoming content",
+		"import must preserve existing destination content and copy conflicts to backup");
+	Check(CopyRetailDataTree(retailSource, retailDestination, retailBackup, testRoot / "import.log", message),
+		"repeating the same import must preserve files without duplicate backup errors");
+	Check(!CopyRetailDataTree(retailSource, retailSource / "NestedCopy", retailBackup,
+		testRoot / "import.log", message) && !fs::exists(retailSource / "NestedCopy"),
+		"an overlapping import destination must be rejected before writing into the source");
+	const fs::path redirectedDestination = testRoot / "RedirectedCopy";
+	fs::create_directories(redirectedDestination, error);
+	fs::create_directory_symlink(retailSource / "Data", redirectedDestination / "Data", error);
+	Check(!CopyRetailDataTree(retailSource, redirectedDestination, retailBackup,
+		testRoot / "import.log", message) && ReadFile(retailSource / "Data/Conflict.ini") == "incoming content",
+		"a destination directory symlink must not redirect writes into the original installation");
+	message.clear();
 	GameOptions options = LoadGameOptions(optionsPath, message);
 	Check(message.empty(), "valid Options.ini must load without an error");
 	Check(options.resolutionWidth == 1024 && options.resolutionHeight == 768,
@@ -762,10 +802,10 @@ int main()
 	const fs::path modLayerRoot = testRoot / "LayerMod";
 	const fs::path patchLayerRoot = testRoot / "LayerPatch";
 	fs::create_directories(modLayerRoot / "Data" / "INI", error);
-	fs::create_directories(patchLayerRoot / "Data" / "INI", error);
+	fs::create_directories(patchLayerRoot / "data" / "ini" / "A", error);
 	{
 		std::ofstream(modLayerRoot / "Data" / "INI" / "Layer.ini") << "layer=mod\n";
-		std::ofstream(patchLayerRoot / "Data" / "INI" / "Layer.ini") << "layer=patch\n";
+		std::ofstream(patchLayerRoot / "data" / "ini" / "Layer.ini") << "layer=patch\n";
 	}
 	const std::string modRootString = modLayerRoot.string();
 	const std::string patchRootString = patchLayerRoot.string();
@@ -786,8 +826,20 @@ int main()
 		"a later loose-file layer must shadow an earlier layer");
 	const std::vector<fs::path> layeredFiles =
 		EchelonContentRuntime::ListFiles("Data/INI", "*.ini", true);
-	Check(layeredFiles.size() == 1 && layeredFiles.front() == fs::canonical(patchLayerRoot / "Data" / "INI" / "Layer.ini"),
-		"directory enumeration must expose one highest-priority copy of each logical file");
+	Check(layeredFiles.size() == 1 && layeredFiles.front() == fs::path("data/ini/layer.ini") &&
+		EchelonContentRuntime::ResolveReadPath(layeredFiles.front().string().c_str(), resolvedLayerFile) &&
+		ReadFile(resolvedLayerFile) == "layer=patch\n",
+		"enumeration must return a logical path that opens the highest-priority file despite directory casing");
+	std::ofstream(patchLayerRoot / "data/ini/Z.ini") << "root ini";
+	std::ofstream(patchLayerRoot / "data/ini/A/Sub.INI") << "nested ini";
+	const auto orderedLayerFiles = EchelonContentRuntime::ListFiles("Data\\INI\\", "*.ini", true);
+	Check(orderedLayerFiles == std::vector<fs::path>{"data/ini/a/sub.ini", "data/ini/layer.ini", "data/ini/z.ini"},
+		"nested enumeration must preserve directory-relative names for the INI root-before-subdirectory rule");
+	Check(EchelonContentRuntime::ListFiles("DATA/INI", "*.ini", false) ==
+		std::vector<fs::path>{"data/ini/layer.ini", "data/ini/z.ini"},
+		"nonrecursive enumeration must find mixed-case layer directories and exclude nested INIs");
+	Check(EchelonContentRuntime::ListFiles("../", "*.ini", true).empty(),
+		"layer directory enumeration must reject traversal outside the layer root");
 	EchelonContentRuntime::Clear();
 	Check(EchelonContentRuntime::IsClear(), "content layer runtime must be empty at session quiescence");
 

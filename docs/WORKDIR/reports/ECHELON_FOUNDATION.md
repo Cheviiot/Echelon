@@ -2,7 +2,7 @@
 
 ## Result
 
-Echelon keeps its product sources at the repository root and the integrated engine in an ordinary tracked `GeneralsX/` directory. No GeneralsX submodule or mod catalog backend is introduced. The existing repository was renamed to [Cheviiot/Echelon](https://github.com/Cheviiot/Echelon), preserving history and issues. This foundation is prepared for draft review, not release publication.
+Echelon keeps its product sources at the repository root and the integrated engine in an ordinary tracked `GeneralsX/` directory. No GeneralsX submodule or mod catalog backend is introduced. The existing repository was renamed to [Cheviiot/Echelon](https://github.com/Cheviiot/Echelon), preserving history and issues. The owner authorized integration into product `main`, with a separate locked `upstream` branch retaining exact original history. No release publication is requested.
 
 The original dirty development tree was preserved in checkpoint `984ab6c91`. Merge `4b7395027` integrates 84 upstream commits, from `70cccbdc34985bf90305c7aaf1ab2e962f3cde2b` through `3c2ed4589599beb631ea6da602c8ac95abf6bcdc` (Beta 18 and its following documentation update). Product extraction was checkpointed in `5300ceb85` before relocating source. Complete original-file and Git-history backups are retained in the owner's hidden workspace management directory.
 
@@ -106,4 +106,12 @@ CI now uses the relocated paths and unified product artifacts, while standalone 
 
 Future updates use [the subtree sync guide](../../HOWTO/SYNC_GENERALSX_UPSTREAM.md). `scripts/qa/check-echelon-upstream-sync.py` checks upstream edit/add/delete mapping against synthetic commits without changing refs, the index or the checkout. Root product files must remain outside incoming upstream changes. Review conflicts by behavior and preserve the ordinary directory arrangement.
 
-No release has been published and no PR has been merged. The draft should remain under review until platform execution and replay compatibility have adequate evidence.
+The owner resumed the product merge after approving the two permanent branches. Known replay and macOS validation limits remain recorded and do not imply release readiness. No release publication is requested.
+
+## Pre-merge review corrections
+
+The automated review on `0f8858a79` identified three valid file-handling problems. The retail import path has been changed from moves to verified copies, preserving source installations, existing destination content and copied conflicts. Copy behavior is shared by both games and covered by source-retention, repeat-import, conflict, symlink and overlapping-path regressions.
+
+The shared content-layer runtime now enumerates logical names and resolves directory components case-insensitively. This preserves the INI loader's root-before-subdirectory order and makes lowercase Windows-mod directories visible on Linux. The incremental product build, CTest regressions, module boundaries and both-engine content-stack smoke check pass. Runtime fixtures now come explicitly from `~/.Echelon`; no old directory is recreated or migrated by QA.
+
+The first macOS CI run exposed a stale SagePatch SDL include path after relocation. The target now consumes `SDL3::Headers`, and configured SagePatch builds are a dependency of the launcher. The local SagePatch target passes; macOS CI must validate its platform-specific sources and packaging.

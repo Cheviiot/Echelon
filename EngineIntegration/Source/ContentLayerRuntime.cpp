@@ -12,7 +12,7 @@
 
 #include <algorithm>
 #include <cctype>
-#include <map>
+#include <set>
 #include <system_error>
 
 namespace fs = std::filesystem;
@@ -177,11 +177,14 @@ std::vector<fs::path> ListFiles(const char *relativeDirectory, const char *searc
 	std::transform(wantedExtension.begin(), wantedExtension.end(), wantedExtension.begin(), [](unsigned char character) {
 		return static_cast<char>(std::tolower(character));
 	});
-	std::map<std::string, fs::path> visibleFiles;
+	std::set<std::string> visibleFiles;
 	for (const ContentLayer &layer : g_layers) {
-		const fs::path directory = (layer.rootPath / relative).lexically_normal();
-		if (!IsInside(directory, layer.rootPath)) continue;
+		// Echelon @bugfix Codex 05/09/2026 Match Windows mod directory casing just as individual reads do.
+		fs::path directory;
+		if (!ResolveCaseInsensitive(layer.rootPath, relative, directory)) continue;
 		std::error_code error;
+		directory = fs::weakly_canonical(directory, error);
+		if (error || !IsInside(directory, layer.rootPath)) continue;
 		if (!fs::is_directory(directory, error) || error) continue;
 		auto accept = [&](const fs::directory_entry &entry) {
 			std::error_code entryError;
@@ -193,12 +196,11 @@ std::vector<fs::path> ListFiles(const char *relativeDirectory, const char *searc
 			if (!wantedExtension.empty() && extension != wantedExtension) return;
 			fs::path canonicalFile = fs::weakly_canonical(entry.path(), entryError);
 			if (entryError || !IsInside(canonicalFile, layer.rootPath)) return;
-			std::string logical = fs::relative(canonicalFile, layer.rootPath, entryError).generic_string();
-			if (entryError) return;
+			std::string logical = (relative / entry.path().lexically_relative(directory)).generic_string();
 			std::transform(logical.begin(), logical.end(), logical.begin(), [](unsigned char character) {
 				return static_cast<char>(std::tolower(character));
 			});
-			visibleFiles[logical] = std::move(canonicalFile);
+			visibleFiles.insert(std::move(logical));
 		};
 		if (recursive) {
 			for (fs::recursive_directory_iterator iterator(directory, fs::directory_options::skip_permission_denied, error), end;
@@ -217,7 +219,9 @@ std::vector<fs::path> ListFiles(const char *relativeDirectory, const char *searc
 		}
 	}
 	result.reserve(visibleFiles.size());
-	for (auto &[logical, physical] : visibleFiles) result.push_back(std::move(physical));
+	// Echelon @bugfix Codex 05/09/2026 INI loading orders logical root files before nested overrides.
+	// ResolveReadPath chooses the highest layer when each enumerated path is opened.
+	for (const std::string &logical : visibleFiles) result.emplace_back(logical);
 	return result;
 }
 
