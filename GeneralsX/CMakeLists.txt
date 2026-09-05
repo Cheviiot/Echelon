@@ -80,16 +80,15 @@ if((WIN32 OR "${CMAKE_SYSTEM}" MATCHES "Windows") AND ${CMAKE_SIZEOF_VOID_P} EQU
     include(cmake/bink.cmake)
 endif()
 
-# Always include DX8 headers (needed for both Windows and Linux builds)
-# On Windows: min-dx8-sdk headers
-# On Linux: DXVK headers (for D3D8→Vulkan translation)
-include(cmake/dx8.cmake)
-
 # SDL3 windowing/input for Linux builds (Phase 1)
 # GeneralsX @build BenderAI 11/02/2026
 if(SAGE_USE_SDL3)
     include(cmake/sdl3.cmake)
 endif()
+
+# Echelon @build Codex 05/09/2026 Configure SDL before DXVK so Meson consumes the same shared library.
+# On Windows: min-dx8-sdk headers. On Linux/macOS: DXVK headers and libraries.
+include(cmake/dx8.cmake)
 
 # Define a dummy stlport target when not on VC6.
 if (IS_VS6_BUILD)

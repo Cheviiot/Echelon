@@ -34,6 +34,6 @@ ctest --test-dir build/macos-vulkan -R echelon_local_content --output-on-failure
 ## macOS-Specific Notes
 
 - **Rosetta2 + Meson**: always use `GeneralsX/cmake/meson-arm64-native.ini` to force `-arch arm64`.
-- **SDL3**: fetched via CMake FetchContent — no system package needed.
+- **SDL3**: fetched via CMake FetchContent. `cmake/dxvk-sdl3.cmake` supplies DXVK with the same shared target through private pkg-config metadata; no Homebrew SDL3 package is needed. Never bypass the packager conflict check by choosing an arbitrary duplicate library.
 - **No Cocoa/Metal calls in game code**: all platform access through SDL3 + DXVK layers.
 - **DXVK fixes**: commit/push to `GeneralsX/references/fbraz3-dxvk` first; never edit `build/_deps/...`.
