@@ -1,12 +1,14 @@
 # HOWTO Tutorials
 
-Step-by-step guides for common tasks in GeneralsX.
+Step-by-step guides for common tasks in Generals: Arsenal.
 
 ## Available Tutorials
 
 | Tutorial | Description |
 |---|---|
-| [Installation](INSTALLATION.md) | Install GeneralsX on Linux (Flatpak) or macOS |
+| [Installation](INSTALLATION.md) | Install Generals: Arsenal on Linux (Flatpak) or macOS |
+| [Arsenal Launcher](GENERALS_ARSENAL_LAUNCHER.md) | Select Generals or Zero Hour, import data, and use launcher CLI profiles |
+| [Synchronize GeneralsX Upstream](SYNC_GENERALSX_UPSTREAM.md) | Merge reviewed GeneralsX updates into a dated synchronization branch |
 | [Getting the Game Files](GETTING_THE_GAME_FILES.md) | Obtain original game assets (Steam, CrossOver, SteamCMD) |
 | [SagePatch Configuration](SAGEPATCH_CONFIGURATION.md) | Configure camera height, scroll speed, terrain draw distance, and other QoL settings |
 | [Russian Localization](RUSSIAN_LOCALIZATION.md) | Apply Russian language patch (EN + RU instructions) |

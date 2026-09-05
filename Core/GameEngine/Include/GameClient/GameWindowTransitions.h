@@ -640,6 +640,7 @@ public:
 	AsciiString getName() { return m_name; }
 	void setName( AsciiString name){ m_name = name;	}
 	void addWindow( TransitionWindow *transWin );
+	TransitionWindow *cloneWindow( AsciiString sourceWindowName, AsciiString targetWindowName, Int buttonFlashDelayOffset );
 	Bool isReversed();
 	Bool isFireOnce() { return m_fireOnce; }
 	Bool m_fireOnce;
@@ -672,6 +673,7 @@ public:
 	void reverse( AsciiString groupName );// reverse the animations for the current group.
 	void remove( AsciiString groupName, Bool skipPending = FALSE );// remove the animation from the current or pending groups.
 	TransitionGroup *getNewGroup( AsciiString name );
+	void cloneWindowTransitions( AsciiString sourceWindowName, AsciiString targetWindowName, Int buttonFlashDelayOffset = 0 );
 private:
 	TransitionGroup *findGroup( AsciiString groupName );
 	typedef std::list<TransitionGroup *> TransitionGroupList;

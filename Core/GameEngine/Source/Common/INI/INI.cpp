@@ -69,6 +69,7 @@
 #if USE_STD_FROM_CHARS_PARSING
 #include <charconv>
 #include <cstdlib>
+#include <limits>
 #include <string_view>
 #include <type_traits>
 #endif
@@ -466,6 +467,15 @@ UnsignedInt INI::load( AsciiString filename, INILoadType loadType, Xfer *pXfer )
 		}
 		fprintf(stderr, "[INI] load - processed total %d lines\n", lineCount);
 		fflush(stderr);
+	}
+	// GeneralsArsenal @bugfix Codex 15/08/2026 Preserve the actionable parser line in release logs for mod compatibility failures.
+	catch (const INIException &exception)
+	{
+		fprintf(stderr, "[INI] ERROR in load('%s'): %s", filename.str(),
+			exception.mFailureMessage ? exception.mFailureMessage : "unknown INI parser failure\n");
+		fflush(stderr);
+		unPrepFile();
+		throw;
 	}
 	catch (...)
 	{
@@ -1709,7 +1719,20 @@ Type scanType(std::string_view token)
 /*static*/ Int INI::scanInt(const char* token)
 {
 #if USE_STD_FROM_CHARS_PARSING == 1
-	return scanType<Int>(token);
+	std::string_view tokenView(token != nullptr ? token : "");
+	DEBUG_ASSERTCRASH(!tokenView.empty(), ("token is not expected to be empty"));
+	if (!tokenView.empty() && tokenView[0] == '+') tokenView.remove_prefix(1);
+	Int64 value = 0;
+	const auto [ptr, ec] = std::from_chars(tokenView.data(), tokenView.data() + tokenView.size(), value);
+	if (ec == std::errc::result_out_of_range) {
+		// GeneralsArsenal @bugfix Codex 15/08/2026 Preserve Windows mod semantics for intentionally oversized integer sentinels.
+		return !tokenView.empty() && tokenView[0] == '-' ?
+			std::numeric_limits<Int>::min() : std::numeric_limits<Int>::max();
+	}
+	if (ec != std::errc{}) throw INI_INVALID_DATA;
+	if (value < std::numeric_limits<Int>::min()) return std::numeric_limits<Int>::min();
+	if (value > std::numeric_limits<Int>::max()) return std::numeric_limits<Int>::max();
+	return static_cast<Int>(value);
 #else
 	Int value;
 	if (sscanf( token, "%d", &value ) != 1)
@@ -1728,7 +1751,34 @@ Type scanType(std::string_view token)
 /*static*/ UnsignedInt INI::scanUnsignedInt(const char* token)
 {
 #if USE_STD_FROM_CHARS_PARSING == 1
-	return scanType<UnsignedInt>(token);
+	std::string_view tokenView(token != nullptr ? token : "");
+	DEBUG_ASSERTCRASH(!tokenView.empty(), ("token is not expected to be empty"));
+
+	// Keep the signed parsing path because retail INI files commonly use -1 as an unsigned sentinel.
+	if (!tokenView.empty() && tokenView[0] == '-')
+	{
+		return scanType<UnsignedInt>(tokenView);
+	}
+
+	// Unlike sscanf, std::from_chars cannot parse a leading plus symbol.
+	if (!tokenView.empty() && tokenView[0] == '+')
+	{
+		tokenView.remove_prefix(1);
+	}
+
+	UnsignedInt value = 0;
+	const auto [ptr, ec] = std::from_chars(tokenView.data(), tokenView.data() + tokenView.size(), value);
+	if (ec == std::errc::result_out_of_range)
+	{
+		// GeneralsArsenal @bugfix Codex 15/08/2026 Preserve retail mod compatibility for oversized unsigned INI literals.
+		return std::numeric_limits<UnsignedInt>::max();
+	}
+	if (ec != std::errc{})
+	{
+		throw INI_INVALID_DATA;
+	}
+
+	return value;
 #else
 	UnsignedInt value;
 	if (sscanf( token, "%u", &value ) != 1)	// unsigned int is %u, not %d

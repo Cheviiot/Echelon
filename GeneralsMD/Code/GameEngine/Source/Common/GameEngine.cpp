@@ -88,6 +88,7 @@
 #include "GameClient/ClientInstance.h"
 #include "GameClient/FXList.h"
 #include "GameClient/GameClient.h"
+#include "GameClient/TerrainVisual.h"
 #include "GameClient/Keyboard.h"
 #include "GameClient/Shell.h"
 #include "GameClient/GameText.h"
@@ -164,7 +165,9 @@ void initSubsystem(
 	const char* path2 = nullptr)
 {
 	sysref = sys;
-	TheSubsystemList->initSubsystem(sys, path1, path2, pXfer, name);
+	TheSubsystemList->initSubsystem(sys, path1, path2, pXfer, name, &sysref, [](void *singletonStorage) {
+		*static_cast<SUBSYSTEM **>(singletonStorage) = nullptr;
+	});
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -318,6 +321,27 @@ GameEngine::~GameEngine()
 #ifdef PERF_TIMERS
 	PerfGather::termPerfDump();
 #endif
+}
+
+//-------------------------------------------------------------------------------------------------
+Bool GeneralsArsenalAreEngineSubsystemSingletonsReleased()
+{
+	return TheSubsystemList == nullptr && TheMapCache == nullptr && TheSkirmishGameInfo == nullptr &&
+		TheChallengeGameInfo == nullptr && TheNetwork == nullptr && TheCommandList == nullptr &&
+		TheNameKeyGenerator == nullptr && TheFileSystem == nullptr && TheGameLODManager == nullptr &&
+		TheLocalFileSystem == nullptr && TheArchiveFileSystem == nullptr && TheWritableGlobalData == nullptr &&
+		TheGameText == nullptr && TheScienceStore == nullptr && TheMultiplayerSettings == nullptr &&
+		TheTerrainTypes == nullptr && TheTerrainRoads == nullptr && TheGlobalLanguageData == nullptr && TheAudio == nullptr &&
+		TheFunctionLexicon == nullptr && TheModuleFactory == nullptr && TheMessageStream == nullptr && TheSidesList == nullptr &&
+		TheCaveSystem == nullptr && TheRankInfoStore == nullptr && ThePlayerTemplateStore == nullptr &&
+		TheParticleSystemManager == nullptr && TheFXListStore == nullptr && TheWeaponStore == nullptr &&
+		TheObjectCreationListStore == nullptr && TheLocomotorStore == nullptr && TheSpecialPowerStore == nullptr &&
+		TheDamageFXStore == nullptr && TheArmorStore == nullptr && TheBuildAssistant == nullptr && TheThingFactory == nullptr &&
+		TheUpgradeCenter == nullptr && TheGameClient == nullptr && TheAI == nullptr && TheGameLogic == nullptr &&
+		TheTeamFactory == nullptr && TheCrateSystem == nullptr && ThePlayerList == nullptr && TheRecorder == nullptr &&
+		TheRadar == nullptr && TheVictoryConditions == nullptr && TheMetaMap == nullptr && TheActionManager == nullptr &&
+		TheGameStateMap == nullptr && TheGameState == nullptr && TheGameResultsQueue == nullptr && TheDisplay == nullptr &&
+		TheTerrainVisual == nullptr && TheShell == nullptr && TheWindowManager == nullptr;
 }
 
 //-------------------------------------------------------------------------------------------------

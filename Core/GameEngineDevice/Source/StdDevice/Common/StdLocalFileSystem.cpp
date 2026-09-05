@@ -29,6 +29,7 @@
 #include "Common/AsciiString.h"
 #include "Common/GameMemory.h"
 #include "Common/PerfTimer.h"
+#include "GeneralsArsenalLauncher/ContentLayerRuntime.h"
 #include "StdDevice/Common/StdLocalFileSystem.h"
 #include "StdDevice/Common/StdLocalFile.h"
 
@@ -62,6 +63,12 @@ static std::filesystem::path fixFilenameFromWindowsPath(const Char *filename, In
 
 	// Convert the filename to a std::filesystem::path and pass that
 	std::filesystem::path path(std::move(fixedFilename));
+
+	// GeneralsArsenal @feature Codex 14/08/2026 Resolve managed loose files from the highest immutable VFS layer first.
+	if (!(access & File::WRITE) && path.is_relative()) {
+		std::filesystem::path layeredPath;
+		if (GeneralsArsenalContentRuntime::ResolveReadPath(filename, layeredPath)) return layeredPath;
+	}
 
 #ifndef _WIN32
 	// check if the file exists to see if fixup is required
@@ -280,6 +287,13 @@ Bool StdLocalFileSystem::doesFileExist(const Char *filename) const
 
 void StdLocalFileSystem::getFileListInDirectory(const AsciiString& currentDirectory, const AsciiString& originalDirectory, const AsciiString& searchName, FilenameList & filenameList, Bool searchSubdirectories) const
 {
+	// GeneralsArsenal @feature Codex 14/08/2026 Add each logical loose file once, using the highest content layer.
+	if (currentDirectory.isEmpty() && std::filesystem::path(originalDirectory.str()).is_relative()) {
+		for (const std::filesystem::path &layeredFile : GeneralsArsenalContentRuntime::ListFiles(
+			originalDirectory.str(), searchName.str(), searchSubdirectories != FALSE)) {
+			filenameList.insert(AsciiString(layeredFile.string().c_str()));
+		}
+	}
 
 	AsciiString asciisearch;
 	asciisearch = originalDirectory;
@@ -312,6 +326,15 @@ void StdLocalFileSystem::getFileListInDirectory(const AsciiString& currentDirect
 		std::string filenameStr = iter->path().filename().string();
 		if (!iter->is_directory() && iter->path().extension() == searchExt &&
 			(strcmp(filenameStr.c_str(), ".") != 0 && strcmp(filenameStr.c_str(), "..") != 0)) {
+			AsciiString logicalFilename = originalDirectory;
+			logicalFilename.concat(currentDirectory);
+			logicalFilename.concat(filenameStr.c_str());
+			std::filesystem::path layeredPath;
+			if (GeneralsArsenalContentRuntime::ResolveReadPath(logicalFilename.str(), layeredPath)) {
+				iter++;
+				done = iter == std::filesystem::directory_iterator();
+				continue;
+			}
 			// if we haven't already, add this filename to the list.
 			// a stl set should only allow one copy of each filename
 			AsciiString newFilename = iter->path().string().c_str();

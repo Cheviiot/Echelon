@@ -381,6 +381,31 @@ void TransitionGroup::addWindow( TransitionWindow *transWin )
 	m_transitionWindowList.push_back(transWin);
 }
 
+// GeneralsX @feature Codex 11/08/2026 Let source-owned runtime UI extensions participate in retail transition groups.
+TransitionWindow *TransitionGroup::cloneWindow( AsciiString sourceWindowName, AsciiString targetWindowName, Int buttonFlashDelayOffset )
+{
+	TransitionWindow *sourceWindow = nullptr;
+	for (TransitionWindow *transitionWindow : m_transitionWindowList)
+	{
+		if (transitionWindow->m_winName.compareNoCase(targetWindowName) == 0)
+			return nullptr;
+		if (transitionWindow->m_winName.compareNoCase(sourceWindowName) == 0)
+			sourceWindow = transitionWindow;
+	}
+
+	if (!sourceWindow)
+		return nullptr;
+
+	TransitionWindow *targetWindow = NEW TransitionWindow;
+	targetWindow->m_winName = targetWindowName;
+	targetWindow->m_style = sourceWindow->m_style;
+	targetWindow->m_frameDelay = sourceWindow->m_frameDelay;
+	if (targetWindow->m_style == BUTTON_TRANSITION_FLASH)
+		targetWindow->m_frameDelay += buttonFlashDelayOffset;
+	addWindow(targetWindow);
+	return targetWindow;
+}
+
 //-----------------------------------------------------------------------------
 
 GameWindowTransitionsHandler::GameWindowTransitionsHandler()
@@ -567,6 +592,18 @@ TransitionGroup *GameWindowTransitionsHandler::getNewGroup( AsciiString name )
 	return g;
 }
 
+// GeneralsX @feature Codex 11/08/2026 Clone all transition memberships instead of duplicating retail group names in code.
+void GameWindowTransitionsHandler::cloneWindowTransitions( AsciiString sourceWindowName, AsciiString targetWindowName,
+	Int buttonFlashDelayOffset )
+{
+	for (TransitionGroup *group : m_transitionGroupList)
+	{
+		TransitionWindow *targetWindow = group->cloneWindow(sourceWindowName, targetWindowName, buttonFlashDelayOffset);
+		if (targetWindow && (group == m_currentGroup || group == m_pendingGroup || group == m_drawGroup || group == m_secondaryDrawGroup))
+			targetWindow->init();
+	}
+}
+
 Bool GameWindowTransitionsHandler::isFinished()
 {
 	if(m_currentGroup)
@@ -606,4 +643,3 @@ void GameWindowTransitionsHandler::parseWindow( INI* ini, void *instance, void *
 	ini->initFromINI(transWin, myFieldParse);
 	((TransitionGroup*)instance)->addWindow(transWin);
 }
-

@@ -1,101 +1,68 @@
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/fbraz3/GeneralsGameCode)
-[![GeneralsX CI](https://github.com/fbraz3/GeneralsX/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fbraz3/GeneralsX/actions/workflows/ci.yml)
-[![GitHub Release](https://img.shields.io/github/v/release/fbraz3/GeneralsX?include_prereleases&sort=date&display_name=tag&style=flat&label=Release)](https://github.com/fbraz3/GeneralsX/releases)
+[![Generals: Arsenal CI](https://github.com/Cheviiot/GeneralsArsenal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Cheviiot/GeneralsArsenal/actions/workflows/ci.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/Cheviiot/GeneralsArsenal?include_prereleases&sort=date&display_name=tag&style=flat&label=Release)](https://github.com/Cheviiot/GeneralsArsenal/releases)
 
-# GeneralsX - Cross-Platform Command & Conquer: Generals
+# Generals: Arsenal
 
-GeneralsX delivers **Linux and macOS** builds of **Command & Conquer: Generals and Zero Hour** through a single modern codebase.
+Generals: Arsenal combines **Command & Conquer: Generals** and **Zero Hour** in one cross-platform SDL3 launcher. The selected engine runs in the same process and window, and can return to the Arsenal selector without restarting the application.
 
-## How to download
+The project is designed to become a common home for both engines, community mods, and patches. Mod installation and patch management are not part of the first release, but their profile and directory interfaces are reserved.
 
-For **official releases and instructions**, visit:
+## Project status
 
-* [GeneralsX Releases](https://github.com/fbraz3/GeneralsX/releases)  - Linux and Mac
-* [TheSuperHackers Releases](https://github.com/TheSuperHackers/GeneralsGameCode/releases) - Windows
-* [Fighter19 Releases](https://github.com/Fighter19/CnC_Generals_Zero_Hour/releases) - Original Linux-focused Zero Hour reference releases
+- Linux is packaged as one Flatpak: `io.github.cheviiot.GeneralsArsenal`.
+- The public executable is `GeneralsArsenal`.
+- Generals and Zero Hour remain separate private engine modules.
+- Retail game assets are not included. You must provide data from a legally owned copy.
+- Linux and macOS share the SDL3, DXVK, OpenAL, and 64-bit platform stack inherited from GeneralsX.
 
-> See our [Tutorial Docs](docs/HOWTO/README.md) for step-by-step guides.
+See the [installation guide](docs/HOWTO/INSTALLATION.md), [launcher guide](docs/HOWTO/GENERALS_ARSENAL_LAUNCHER.md), and [build guides](docs/BUILD/) for details.
 
-### Community Ports based on GeneralsX
+## Command line
 
-* [Generals-Mac-iOS-iPad](https://github.com/ammaarreshi/Generals-Mac-iOS-iPad) - iOS port by [@ammaarreshi](https://github.com/ammaarreshi)
-* [Generals-Android](https://github.com/fadi-labib/Generals-Android) - Android port by [@fadi-labib](https://github.com/fadi-labib)
-* [GeneralsXWeb](https://github.com/meerzulee/GeneralsXWeb) - Web port by [@meerzulee](https://github.com/meerzulee)
-* [wasm-generals](https://github.com/origami-ltd/wasm-generals) - WebAssembly + WebGPU browser port by [@ebellumat](https://github.com/ebellumat), playable at [generals.wasm.com.br](https://generals.wasm.com.br)
+Show the selector:
 
-## 💖 Support This Project
+```bash
+GeneralsArsenal --launcher
+```
 
-The optional sponsorship link exists to help cover the maintenance costs specific to GeneralsX: Linux/macOS integration, project-specific adaptation work, testing infrastructure, packaging, tooling, release work, and documentation.
+Launch a profile directly while forwarding the remaining game arguments:
 
-- **[Sponsor on GitHub](https://github.com/sponsors/fbraz3)**
+```bash
+GeneralsArsenal --profile=generals -win
+GeneralsArsenal --profile=zerohour -headless -replay example.rep
+```
 
-Your support specifically helps with:
+Application data is stored only under `$HOME/.GeneralsArsenal`. Generals: Arsenal does not automatically read or migrate old GeneralsX directories.
 
-- **Integration, Adaptation and Enhancements** - Merging reference work, resolving incompatibilities, and carrying project-specific fixes needed for supported platforms
-- **Testing Infrastructure** - Validation across Linux and macOS, plus exploratory work needed to keep future platform paths viable
-- **Packaging & Releases** - AppImage, Flatpak, macOS bundles, CI pipeline
-- **Documentation & Maintenance** - Build guides, installation instructions, developer resources, and ongoing repository upkeep
+## Building
 
-## Where does the GeneralsX name come from?
+On Linux, configure and build the unified launcher with both engine modules:
 
-There are two reasons for this name:
+```bash
+cmake --preset linux64-deploy -DRTS_BUILD_UNIVERSAL_LAUNCHER=ON
+cmake --build build/linux64-deploy --target generals_arsenal_launcher
+```
 
-1. X = Cross - reflects the cross-platform efforts
-2. I am a big fan of the Mega Man X franchise, so this is also a tribute to that classic series.
+The existing `g_generals` and `z_generals` targets remain available for upstream-compatible engine development and debugging.
 
-## Project Goals
+## Relationship to GeneralsX
 
-GeneralsX exists to turn upstream preservation and porting work into a practical and maintainable project for active Linux and macOS players.
+Generals: Arsenal is a fork of [fbraz3/GeneralsX](https://github.com/fbraz3/GeneralsX). It preserves the complete Git history, GPL license, contributor attribution, and the upstream engine directory structure.
 
-Its main goals are:
+The fork adds a branded universal launcher and fork-owned packaging as a deliberately small overlay. Engine improvements continue to be integrated from GeneralsX through reviewed Git merges instead of source snapshots or history rewrites. See [Synchronizing GeneralsX upstream](docs/HOWTO/SYNC_GENERALSX_UPSTREAM.md).
 
-- Preserve retail gameplay behavior while modernizing the platform layer.
-- Maintain a **single codebase** with Linux and macOS as the active targets. Both Zero Hour and the Generals base game are stable and functional; bugfixes and improvements must be applied to both, while keeping a future Windows path possible.
-- Carry the adaptation work needed to make the stack function in practice across supported platforms, including repository-specific fixes when upstream constraints leave gaps.
-- Deliver reproducible builds, packaging, and release workflows that make the port usable beyond local development setups.
-- Replace the original Windows-only DirectX 8 / Miles stack with portable open-source equivalents where appropriate.
-- Keep upstream lineage clear by distinguishing foundational work from the integration, packaging, and platform support specific to GeneralsX.
+GeneralsX itself builds on major community efforts:
 
-## How does this project relate to other community projects?
+- [TheSuperHackers/GeneralsGameCode](https://github.com/TheSuperHackers/GeneralsGameCode) provides the upstream game-code foundation, preservation work, compatibility fixes, and long-term maintenance.
+- [Fighter19/CnC_Generals_Zero_Hour](https://github.com/Fighter19/CnC_Generals_Zero_Hour), including major work by feliwir, pioneered much of the SDL3, DXVK, OpenAL, FFmpeg, and Linux portability stack used by GeneralsX.
+- All original GeneralsX and community contributors retain their authorship in the repository history and source annotations.
 
-GeneralsX builds on complementary community efforts with different roles.
+## Contributing
 
-**TheSuperHackers** provides the main upstream foundation for stability, bug fixes, retail compatibility, and long-term maintenance of the original game code.
+Open issues and pull requests at [Cheviiot/GeneralsArsenal](https://github.com/Cheviiot/GeneralsArsenal). Changes to shared platform code and general bug fixes should remain applicable to both Generals and Zero Hour. Fork-specific branding belongs in the centralized brand configuration and Arsenal launcher layer.
 
-**Fighter19's fork**, including major work by **feliwir**, is a key Zero Hour cross-platform reference that established much of the ecosystem groundwork used here, including SDL3 windowing, DXVK-based rendering, OpenAL audio, FFmpeg media support, filesystem modernization, and related Linux-focused portability work.
+## License and trademarks
 
-While GeneralsX builds on important community work, this project also includes substantial original effort in integration, adaptation, platform-specific fixes, enhancements, testing, packaging, and ongoing maintenance.
+Generals: Arsenal remains licensed under the GNU General Public License; see [LICENSE.md](LICENSE.md). Upstream copyright notices and attribution are preserved.
 
-Because these projects serve different but complementary goals, not every change belongs in the same place. Improvements aligned with upstream stability or core maintenance priorities should be contributed back to TheSuperHackers, while GeneralsX keeps changes specific to cross-platform delivery, packaging, and platform integration.
-
-##  Building from Source
-
-- [ Linux Build Guide](docs/BUILD/LINUX.md)
-- [ macOS Build Guide](docs/BUILD/MACOS.md)
-
-###  Known Issues & Limitations
-
-For documented limitations and known bugs, check the [issues page](https://github.com/fbraz3/GeneralsX/issues).
-
----
-
-## 🤝 How to Contribute
-
-1. Check [current issues](https://github.com/fbraz3/GeneralsX/issues) and [GitHub discussions](https://github.com/fbraz3/GeneralsX/discussions)
-2. Read platform-specific build guides ([Windows](docs/ETC/), [macOS](docs/BUILD/MACOS.md), [Linux](docs/BUILD/LINUX.md))
-3. Submit issues or pull requests with detailed information
-
-## 🙏 Special Thanks
-
-- **[Westwood Studios](https://cnc-comm.com/westwood-studios)** for creating the legendary Command & Conquer series
-- **[EA Games](https://www.ea.com/)** for Command & Conquer: Generals, which continues to inspire gaming communities
-- **[TheSuperHackers / Xezon](https://github.com/TheSuperHackers/GeneralsGameCode)** and contributors for the upstream stability, bug fixes, and code modernization that form the foundation of GeneralsX
-- **[Fighter19](https://github.com/Fighter19)** for the cross-platform port that pioneered SDL3 windowing, DXVK graphics, and MinGW build support on Linux
-- **[feliwir](https://github.com/feliwir)** for the foundational cross-platform systems implemented in Fighter19's fork: OpenAL audio, FFmpeg video decoding, C++17 filesystem, and Freetype/Fontconfig text rendering
-- **All contributors and sponsors** for helping to make this game truly cross-platform and accessible worldwide
-
-## 📄 License
-
-See the [LICENSE](./LICENSE.md) file for details.
-
-EA has not endorsed and does not support this product. All trademarks are the property of their respective owners.
+This project is not endorsed or supported by Electronic Arts. Command & Conquer, Generals, Zero Hour, and related marks belong to their respective owners. No retail artwork or game data is distributed by this repository or its packages.

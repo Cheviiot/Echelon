@@ -75,10 +75,20 @@
 
 #include "GameClient/InGameUI.h"
 
+#if defined(SAGE_USE_SDL3) && !defined(_WIN32)
+#include "GameClient/GadgetPushButton.h"
+#include "GeneralsArsenalLauncher/EngineModuleAPI.h"
+#include <cstdlib>
+#include <cstring>
+#endif
+
 // GeneralsX @feature BenderAI 21/04/2026 In-game update checker for tagged release builds
 #ifdef SAGE_UPDATE_CHECK
 #include "Common/UpdateChecker.h"
 #include "GameClient/GadgetPushButton.h"
+#ifdef GENERALS_ARSENAL_BRAND
+#include "GeneralsArsenalLauncher/BrandIdentity.h"
+#endif
 #include <SDL3/SDL.h>
 #endif
 
@@ -189,6 +199,15 @@ static Bool startGame = FALSE;
 static Int	initialGadgetDelay = 210;
 // GeneralsX @bugfix BenderAI 31/03/2026 Keep fallback credit label tied to main menu lifecycle so it does not leak into gameplay.
 static GameWindow *fallbackCreditLabel = nullptr;
+#if defined(SAGE_USE_SDL3) && !defined(_WIN32)
+// GeneralsX @feature Codex 11/08/2026 Runtime-only launcher return row; retail MainMenu.wnd remains untouched.
+static GameWindow *launcherReturnButton = nullptr;
+static GameWindow *launcherReturnContainer = nullptr;
+static GameWindow *launcherReturnSurface = nullptr;
+static Int launcherReturnContainerHeight = 0;
+static Int launcherReturnSurfaceHeight = 0;
+static void removeLauncherReturnButton();
+#endif
 
 enum
 {
@@ -330,6 +349,9 @@ static void doGameStart()
 static void shutdownComplete( WindowLayout *layout )
 {
 	isShuttingDown = FALSE;
+#if defined(SAGE_USE_SDL3) && !defined(_WIN32)
+	removeLauncherReturnButton();
+#endif
 	if (fallbackCreditLabel)
 	{
 		TheWindowManager->winDestroy(fallbackCreditLabel);
@@ -483,6 +505,120 @@ static void initLabelVersion()
 	}
 }
 
+#if defined(SAGE_USE_SDL3) && !defined(_WIN32)
+static void removeLauncherReturnButton()
+{
+	if (launcherReturnButton)
+	{
+		TheWindowManager->winDestroy(launcherReturnButton);
+		launcherReturnButton = nullptr;
+	}
+	if (launcherReturnSurface && launcherReturnSurfaceHeight > 0)
+	{
+		Int width = 0;
+		Int height = 0;
+		launcherReturnSurface->winGetSize(&width, &height);
+		launcherReturnSurface->winSetSize(width, launcherReturnSurfaceHeight);
+	}
+	if (launcherReturnContainer && launcherReturnContainerHeight > 0)
+	{
+		Int width = 0;
+		Int height = 0;
+		launcherReturnContainer->winGetSize(&width, &height);
+		launcherReturnContainer->winSetSize(width, launcherReturnContainerHeight);
+	}
+	launcherReturnContainer = nullptr;
+	launcherReturnSurface = nullptr;
+	launcherReturnContainerHeight = 0;
+	launcherReturnSurfaceHeight = 0;
+}
+
+// GeneralsX @feature Codex 11/08/2026 Extend the retail default-menu container with a native seventh row.
+static void initLauncherReturnButton()
+{
+	if (!GeneralsArsenalIsLauncherSession() || launcherReturnButton || !TheWindowManager || !parentMainMenu || !buttonExit)
+		return;
+
+	launcherReturnContainer = dropDownWindows[DROPDOWN_MAIN];
+	launcherReturnSurface = buttonExit->winGetParent();
+	if (!launcherReturnContainer || !launcherReturnSurface)
+		return;
+
+	Int exitX = 0;
+	Int exitY = 0;
+	Int width = 0;
+	Int height = 0;
+	buttonExit->winGetPosition(&exitX, &exitY);
+	buttonExit->winGetSize(&width, &height);
+
+	Int rowPitch = height + 4;
+	if (buttonCredits && buttonCredits->winGetParent() == launcherReturnSurface)
+	{
+		Int creditsX = 0;
+		Int creditsY = 0;
+		buttonCredits->winGetPosition(&creditsX, &creditsY);
+		if (exitY > creditsY)
+			rowPitch = exitY - creditsY;
+	}
+
+	Int containerWidth = 0;
+	launcherReturnContainer->winGetSize(&containerWidth, &launcherReturnContainerHeight);
+	launcherReturnContainer->winSetSize(containerWidth, launcherReturnContainerHeight + rowPitch);
+	Int surfaceWidth = 0;
+	launcherReturnSurface->winGetSize(&surfaceWidth, &launcherReturnSurfaceHeight);
+	launcherReturnSurface->winSetSize(surfaceWidth, launcherReturnSurfaceHeight + rowPitch);
+
+	WinInstanceData instData;
+	instData.init();
+	WinInstanceData *exitInstance = buttonExit->winGetInstanceData();
+	instData.m_style = exitInstance->m_style;
+	instData.m_imageOffset = exitInstance->m_imageOffset;
+	instData.m_headerTemplateName = exitInstance->m_headerTemplateName;
+	instData.m_tooltipDelay = exitInstance->m_tooltipDelay;
+	const char *windowName = "MainMenu.wnd:ButtonReturnToLauncher";
+	instData.m_id = TheNameKeyGenerator->nameToKey(windowName);
+	instData.m_decoratedNameString = windowName;
+	instData.m_textLabelString = "GeneralsXReturnToLauncher";
+	launcherReturnButton = TheWindowManager->gogoGadgetPushButton(launcherReturnSurface,
+		buttonExit->winGetStatus(), exitX, exitY + rowPitch, width, height, &instData, buttonExit->winGetFont(), FALSE);
+
+	if (!launcherReturnButton)
+	{
+		removeLauncherReturnButton();
+		return;
+	}
+
+	launcherReturnButton->winSetDrawFunc(buttonExit->winGetDrawFunc());
+	for (Int index = 0; index < MAX_DRAW_DATA; ++index)
+	{
+		launcherReturnButton->winSetEnabledImage(index, buttonExit->winGetEnabledImage(index));
+		launcherReturnButton->winSetEnabledColor(index, buttonExit->winGetEnabledColor(index));
+		launcherReturnButton->winSetEnabledBorderColor(index, buttonExit->winGetEnabledBorderColor(index));
+		launcherReturnButton->winSetDisabledImage(index, buttonExit->winGetDisabledImage(index));
+		launcherReturnButton->winSetDisabledColor(index, buttonExit->winGetDisabledColor(index));
+		launcherReturnButton->winSetDisabledBorderColor(index, buttonExit->winGetDisabledBorderColor(index));
+		launcherReturnButton->winSetHiliteImage(index, buttonExit->winGetHiliteImage(index));
+		launcherReturnButton->winSetHiliteColor(index, buttonExit->winGetHiliteColor(index));
+		launcherReturnButton->winSetHiliteBorderColor(index, buttonExit->winGetHiliteBorderColor(index));
+	}
+	launcherReturnButton->winSetEnabledTextColors(buttonExit->winGetEnabledTextColor(), buttonExit->winGetEnabledTextBorderColor());
+	launcherReturnButton->winSetDisabledTextColors(buttonExit->winGetDisabledTextColor(), buttonExit->winGetDisabledTextBorderColor());
+	launcherReturnButton->winSetHiliteTextColors(buttonExit->winGetHiliteTextColor(), buttonExit->winGetHiliteTextBorderColor());
+
+	const char *language = std::getenv("GENERALS_ARSENAL_UI_LANGUAGE");
+	if (!language || !language[0]) language = std::getenv("LC_ALL");
+	if (!language || !language[0]) language = std::getenv("LC_MESSAGES");
+	if (!language || !language[0]) language = std::getenv("LANG");
+	UnicodeString text;
+	if (language && std::strncmp(language, "ru", 2) == 0)
+		text.format(L"ВЕРНУТЬСЯ В ARSENAL");
+	else
+		text.format(L"RETURN TO ARSENAL");
+	GadgetButtonSetText(launcherReturnButton, text);
+	TheTransitionHandler->cloneWindowTransitions("MainMenu.wnd:ButtonExit", windowName, 1);
+}
+#endif
+
 //-------------------------------------------------------------------------------------------------
 /** Initialize the main menu */
 //-------------------------------------------------------------------------------------------------
@@ -613,6 +749,9 @@ void MainMenuInit( WindowLayout *layout, void *userData )
 #endif
 
 	initLabelVersion();
+#if defined(SAGE_USE_SDL3) && !defined(_WIN32)
+	initLauncherReturnButton();
+#endif
 
 	//TheShell->registerWithAnimateManager(buttonCampaign, WIN_ANIMATION_SLIDE_LEFT, TRUE, 800);
 	//TheShell->registerWithAnimateManager(buttonSkirmish, WIN_ANIMATION_SLIDE_LEFT, TRUE, 600);
@@ -1382,6 +1521,15 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 
 			if(buttonPushed)
 				break;
+#if defined(SAGE_USE_SDL3) && !defined(_WIN32)
+			if (launcherReturnButton && control == launcherReturnButton)
+			{
+				buttonPushed = TRUE;
+				GeneralsArsenalRequestReturnToLauncher();
+				quitCallback();
+				break;
+			}
+#endif
 #if defined(RTS_DEBUG) || defined RTS_PROFILE_LEGACY
 			if( control == buttonCampaign )
 			{
@@ -1594,7 +1742,11 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 			{
 #ifdef SAGE_UPDATE_CHECK
 				// GeneralsX @feature BenderAI 21/04/2026 Open GitHub releases page instead of legacy GameSpy patch download
+#ifdef GENERALS_ARSENAL_BRAND
+				SDL_OpenURL(GeneralsArsenalBrand::kReleasesUrl);
+#else
 				SDL_OpenURL("https://github.com/fbraz3/GeneralsX/releases");
+#endif
 #else
 				StartDownloadingPatches();
 #endif
@@ -1603,7 +1755,12 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 			else if( updateNotifyButton != nullptr && control == updateNotifyButton )
 			{
 				// GeneralsX @feature BenderAI 21/04/2026 Dynamic update button click -> open releases page
+#ifdef GENERALS_ARSENAL_BRAND
+				// GeneralsArsenal @feature Codex 13/08/2026 Keep the upstream notification behavior on the fork's release channel.
+				SDL_OpenURL(GeneralsArsenalBrand::kReleasesUrl);
+#else
 				SDL_OpenURL("https://github.com/fbraz3/GeneralsX/releases");
+#endif
 			}
 #endif
 			else if( controlID == exitID )

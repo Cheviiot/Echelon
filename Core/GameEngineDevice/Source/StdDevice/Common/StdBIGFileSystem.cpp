@@ -34,6 +34,8 @@
 #include "Common/GameMemory.h"
 #include "Common/LocalFileSystem.h"
 #include "Common/Registry.h"
+#include "GeneralsArsenalLauncher/ArchiveLoadPolicy.h"
+#include "GeneralsArsenalLauncher/ContentLayerRuntime.h"
 
 #include "StdDevice/Common/StdBIGFile.h"
 #include "StdDevice/Common/StdBIGFileSystem.h"
@@ -42,6 +44,10 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <algorithm>
+#include <filesystem>
+#include <set>
+#include <vector>
 
 #if defined(_UNIX)
 #include <strings.h>
@@ -342,7 +348,7 @@ static Bool loadPrimaryGameAssets(TBigFileSystem* fileSystem, AsciiString* loade
 	}
 
 	// Backward compatibility with previous env naming.
-	const char* compatibilityEnvValue = getenv("GENERALSX_ASSET_PATH");
+	const char* compatibilityEnvValue = getenv("GENERALS_ARSENAL_ASSET_PATH");
 	AsciiString sanitizedCompatibilityEnvPath;
 	if (sanitizeConfiguredPath(compatibilityEnvValue, sanitizedCompatibilityEnvPath)) {
 		if (tryLoadBigFiles(fileSystem, sanitizedCompatibilityEnvPath, "env-compat")) {
@@ -434,7 +440,7 @@ static void loadBaseGeneralsAssetsForZH(TBigFileSystem* fileSystem, const AsciiS
 		}
 	}
 
-	const char* compatibilityBaseEnvValue = getenv("GENERALSX_GENERALS_ASSET_PATH");
+	const char* compatibilityBaseEnvValue = getenv("GENERALS_ARSENAL_GENERALS_ASSET_PATH");
 	if (compatibilityBaseEnvValue != nullptr && compatibilityBaseEnvValue[0] != '\0') {
 		if (tryLoadBigFiles(fileSystem, AsciiString(compatibilityBaseEnvValue), "env-generals-compat")) {
 			return;
@@ -508,6 +514,66 @@ void StdBIGFileSystem::init() {
 #if RTS_ZEROHOUR
 	loadBaseGeneralsAssetsForZH(this, primaryAssetsDirectory);
 #endif
+
+	// GeneralsArsenal @feature Codex 15/08/2026 Preserve SAGE's lexicographic archive priority inside every managed layer.
+	// ArchiveFileSystem prepends archives mounted with overwrite=TRUE. Mounting a layer in reverse filename order therefore
+	// keeps names such as "!!Patch.big" above "!Fallback.big", while the complete layer still shadows all earlier layers.
+	for (const GeneralsArsenalContentRuntime::ContentLayer &layer : GeneralsArsenalContentRuntime::Layers()) {
+		std::vector<std::filesystem::path> archives;
+		std::error_code layerError;
+		for (std::filesystem::directory_iterator iterator(layer.rootPath,
+			std::filesystem::directory_options::skip_permission_denied, layerError), end;
+			!layerError && iterator != end; iterator.increment(layerError)) {
+			std::string extension = iterator->path().extension().string();
+			std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char character) {
+				return static_cast<char>(std::tolower(character));
+			});
+			// GeneralsArsenal @feature Codex 15/08/2026 Mount legacy .gib packages directly instead of recreating GenLauncher's retail symlink trick.
+			if (!iterator->is_symlink(layerError) && iterator->is_regular_file(layerError) &&
+				(extension == ".big" || extension == ".gib")) {
+				archives.push_back(iterator->path());
+			}
+		}
+		std::sort(archives.begin(), archives.end());
+		Bool loaded = FALSE;
+		size_t mountedFileCount = 0;
+		std::vector<std::pair<std::filesystem::path, ArchiveFile *> > mountedArchives;
+		for (std::vector<std::filesystem::path>::const_reverse_iterator iterator = archives.rbegin();
+			iterator != archives.rend(); ++iterator) {
+			const std::filesystem::path &archivePath = *iterator;
+			const std::string archiveName = archivePath.string();
+			if (GeneralsArsenalArchivePolicy::IsArchiveDisabled(archiveName.c_str())) continue;
+			ArchiveFile *archiveFile = openArchiveFile(archiveName.c_str());
+			if (!archiveFile) continue;
+			loadIntoDirectoryTree(archiveFile, TRUE);
+			FilenameList mountedFiles;
+			archiveFile->getFileListInDirectory("", "", "*", mountedFiles, TRUE);
+			mountedFileCount += mountedFiles.size();
+			mountedArchives.push_back(std::make_pair(archivePath, archiveFile));
+			m_archiveFileMap[AsciiString(archiveName.c_str())] = archiveFile;
+			loaded = TRUE;
+		}
+
+		// GeneralsArsenal @test Codex 15/08/2026 Verify final duplicate resolution against the original SAGE filename order.
+		std::sort(mountedArchives.begin(), mountedArchives.end(),
+			[](const std::pair<std::filesystem::path, ArchiveFile *> &left,
+				const std::pair<std::filesystem::path, ArchiveFile *> &right) { return left.first < right.first; });
+		std::set<AsciiString> expectedFiles;
+		Bool precedenceVerified = TRUE;
+		for (const std::pair<std::filesystem::path, ArchiveFile *> &mountedArchive : mountedArchives) {
+			FilenameList archiveFiles;
+			mountedArchive.second->getFileListInDirectory("", "", "*", archiveFiles, TRUE);
+			for (const AsciiString &archiveFile : archiveFiles) {
+				if (expectedFiles.insert(archiveFile).second && getArchiveFile(archiveFile) != mountedArchive.second) {
+					precedenceVerified = FALSE;
+				}
+			}
+		}
+		fprintf(stderr, "[CONTENT-LAYER] priority=%u id=%s version=%s root=%s big=%s archives=%zu files=%zu precedence=%s\n",
+			layer.priority, layer.id.c_str(), layer.version.c_str(), layer.rootPath.string().c_str(), loaded ? "loaded" : "none",
+			mountedArchives.size(), mountedFileCount, precedenceVerified ? "verified" : "invalid");
+		fflush(stderr);
+	}
 }
 
 void StdBIGFileSystem::reset() {
@@ -656,6 +722,13 @@ Bool StdBIGFileSystem::loadBigFilesFromDirectory(AsciiString dir, AsciiString fi
 	Bool actuallyAdded = FALSE;
 	FilenameListIter it = filenameList.begin();
 	while (it != filenameList.end()) {
+		// GeneralsArsenal @feature Codex 13/08/2026 Let the launcher disable exact optional BIG archives without touching retail files.
+		if (GeneralsArsenalArchivePolicy::IsArchiveDisabled((*it).str())) {
+			fprintf(stderr, "INFO: Generals: Arsenal skipped BIG archive by launch policy: %s\n", (*it).str());
+			fflush(stderr);
+			it++;
+			continue;
+		}
 #if RTS_ZEROHOUR
 		// TheSuperHackers @bugfix bobtista 18/11/2025 Skip duplicate INIZH.big in Data\INI to prevent CRC mismatches.
 		// English, Chinese, and Korean SKUs shipped with two INIZH.big files (one in Run directory, one in Run\Data\INI).

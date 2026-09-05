@@ -1084,6 +1084,20 @@ target_include_directories(g_gameengine PRIVATE
     Include/Precompiled
 )
 
+if(SAGE_USE_SDL3)
+    target_include_directories(g_gameengine PRIVATE
+        ${CMAKE_SOURCE_DIR}/Core/GameEngineDevice/Include
+    )
+endif()
+
+if(RTS_BUILD_UNIVERSAL_LAUNCHER)
+    # GeneralsX @build Codex 11/08/2026 Keep libstdc++ allocation pairs on the process allocator across the module boundary.
+    target_compile_definitions(g_gameengine PRIVATE
+        GENERALS_ARSENAL_BRAND=1
+        GENERALS_ARSENAL_ENGINE_MODULE_ALLOCATOR=1
+    )
+endif()
+
 target_link_libraries(g_gameengine PRIVATE
     corei_gameengine_private
     gi_always

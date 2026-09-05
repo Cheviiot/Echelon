@@ -27,7 +27,8 @@ static void ensureScreenshotDir(char* outPath, size_t outPathLen) {
         const struct passwd* pw = getpwuid(getuid());
         home = pw ? pw->pw_dir : ".";
     }
-    snprintf(outPath, outPathLen, "%s/Pictures/GeneralsX", home);
+    // GeneralsArsenal @tweak Codex 12/08/2026 Store screenshots under the active public product name.
+    snprintf(outPath, outPathLen, "%s/Pictures/GeneralsArsenal", home);
     mkdir(outPath, 0755);
 }
 
@@ -38,7 +39,7 @@ static void timestampFilename(char* out, size_t outLen, const char* dir) {
     localtime_r(&t, &tm);
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         now.time_since_epoch()) % 1000;
-    snprintf(out, outLen, "%s/generalsx_%04d-%02d-%02d_%02d-%02d-%02d-%03d.png",
+    snprintf(out, outLen, "%s/generals-arsenal_%04d-%02d-%02d_%02d-%02d-%02d-%03d.png",
              dir,
              tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
              tm.tm_hour, tm.tm_min, tm.tm_sec,

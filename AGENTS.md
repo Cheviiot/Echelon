@@ -1,7 +1,7 @@
-# GeneralsX: Instructions for AI Coding Agents
+# Generals: Arsenal — Instructions for AI Coding Agents
 
 ## What I Am
-GeneralsX is a cross-platform port of Command & Conquer: Generals Zero Hour for **Linux and macOS**, porting legacy Windows DirectX 8 + Miles Sound code to a modern stack (SDL3 + DXVK + OpenAL + 64-bit). This is a **massive C++ game engine** (~500k LOC) preserving retail gameplay while modernizing the platform layer.
+Generals: Arsenal is a fork of GeneralsX that combines the Command & Conquer: Generals and Zero Hour engine branches behind one launcher for **Linux and macOS**. It preserves the GeneralsX cross-platform stack (SDL3 + DXVK + OpenAL + 64-bit) and keeps the shared engine structure close to upstream for regular reviewed merges.
 
 ## Key Entry Points
 - `GeneralsMD/Code/Main/WinMain.cpp`
@@ -184,7 +184,7 @@ git merge thesuperhackers/main
 - Build system: merge carefully, test both versions
 
 ## Code Conventions
-- **Annotate changes**: `// GeneralsX @keyword author DD/MM/YYYY Description`
+- **Annotate new fork changes**: `// GeneralsArsenal @keyword author DD/MM/YYYY Description`. Preserve historical `// GeneralsX @keyword ...` annotations.
 - **Keywords**: `@bugfix` / `@feature` / `@performance` / `@refactor` / `@tweak` / `@build`
 - **Attribution**: Add upstream PR references with author and GitHub URL
 - **English only**: All code, comments, documentation

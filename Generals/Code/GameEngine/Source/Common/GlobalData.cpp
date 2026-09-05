@@ -1343,6 +1343,20 @@ AsciiString GlobalData::BuildUserDataPathFromIni()
 {
 	AsciiString userDataDir;
 
+#ifndef _WIN32
+	// GeneralsX @feature Codex 11/08/2026 Let the universal launcher provide the canonical per-engine user-data directory.
+	if (const char *launcherUserDataRoot = getenv("GENERALS_ARSENAL_USER_DATA_ROOT"))
+	{
+		if (launcherUserDataRoot[0])
+		{
+			std::filesystem::path path = std::filesystem::path(launcherUserDataRoot) / "";
+			std::filesystem::create_directories(path);
+			userDataDir = path.string().c_str();
+			return userDataDir;
+		}
+	}
+#endif
+
 #ifdef _WIN32
 	// GeneralsX @refactor Bender 01/04/2026 Windows-specific path handling
 	// Integrates upstream bug-fix for OneDrive/Group Policy folder redirection
@@ -1395,12 +1409,11 @@ AsciiString GlobalData::BuildUserDataPathFromIni()
 	userDataDir = myDocumentsDirectory;
 
 #elif defined(__APPLE__)
-	// GeneralsX @feature Bender 01/04/2026 macOS user data directory
-	// Uses ~/Library/Application Support as standard macOS location
+	// GeneralsArsenal @feature Codex 12/08/2026 Keep standalone engine data inside the Arsenal root.
 	{
 		const char* home = getenv("HOME");
 		if (home) {
-			std::filesystem::path path = std::filesystem::path(home) / "Library" / "Application Support" / "GeneralsX" / "Generals" / "";
+			std::filesystem::path path = std::filesystem::path(home) / ".GeneralsArsenal" / "UserData" / "Generals" / "";
 			std::filesystem::create_directories(path);
 			userDataDir = path.string().c_str();
 		} else {
@@ -1409,22 +1422,16 @@ AsciiString GlobalData::BuildUserDataPathFromIni()
 	}
 
 #else
-	// GeneralsX @feature Bender 01/04/2026 Linux user data directory
-	// Uses XDG Base Directory specification
+	// GeneralsArsenal @feature Codex 12/08/2026 Keep standalone engine data inside the Arsenal root.
 	{
 		std::filesystem::path path;
-		const char* xdgDataHome = getenv("XDG_DATA_HOME");
 		const char* home = getenv("HOME");
-		
-		if (xdgDataHome) {
-			path = std::filesystem::path(xdgDataHome);
-		} else if (home) {
-			path = std::filesystem::path(home) / ".local" / "share";
+
+		if (home) {
+			path = std::filesystem::path(home) / ".GeneralsArsenal" / "UserData" / "Generals";
 		} else {
 			path = ".";
 		}
-
-		path = path / "GeneralsX" / "Generals" / "";
 		std::filesystem::create_directories(path);
 		userDataDir = path.string().c_str();
 	}

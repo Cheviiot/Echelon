@@ -135,7 +135,7 @@ directly with `run.sh`:
 | `-nologo` | Skip the EA / Westwood intro |
 | `-noShellAnim` | Skip the animated main-menu camera |
 | `-noshellmap` | Skip the animated background map |
-| `-quickstart` | Combined fast-boot |
+| `-quickstart` | Skip startup movies, logos, and window animations while retaining the live shell map |
 | `-xres N -yres N` | Any resolution (the engine no longer locks the list) |
 | `-forcefullviewport` | Full viewport on UI mods like Control Bar Pro |
 | `-win` / `-fullscreen` | Window mode |

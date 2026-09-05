@@ -99,3 +99,42 @@ endif()
 if(MINGW AND COMMAND add_debug_strip_target)
     add_debug_strip_target(z_generals)
 endif()
+
+# GeneralsX @build Codex 11/08/2026 Build Zero Hour as a private universal-launcher module.
+if(RTS_BUILD_UNIVERSAL_LAUNCHER AND SAGE_USE_SDL3 AND UNIX)
+    add_library(z_generals_module MODULE
+        SDL3Main.cpp
+        LinuxStubs.cpp
+    )
+    target_link_libraries(z_generals_module PRIVATE
+        core_profile_legacy
+        d3dx8
+        z_gameengine
+        z_gameenginedevice
+        zi_always
+        sdl3lib
+    )
+    target_include_directories(z_generals_module PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_BINARY_DIR}
+    )
+    target_compile_definitions(z_generals_module PRIVATE
+        GENERALS_ARSENAL_ENGINE_MODULE=1
+        GENERALS_ARSENAL_ENGINE_BUILD=1
+    )
+    set_target_properties(z_generals_module PROPERTIES
+        OUTPUT_NAME GeneralsArsenalZeroHourEngine
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN YES
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${GENERALS_ARSENAL_OUTPUT_DIRECTORY}"
+    )
+    if(APPLE)
+        target_link_options(z_generals_module PRIVATE "-Wl,-exported_symbol,_GeneralsArsenal_GetEngineModuleV2")
+    else()
+        target_link_options(z_generals_module PRIVATE
+            "-Wl,--version-script=${CMAKE_SOURCE_DIR}/Core/GameEngineDevice/Source/GeneralsArsenalLauncher/engine-module.exports"
+            "-Wl,--exclude-libs,ALL"
+            "-Wl,-Bsymbolic"
+        )
+    endif()
+endif()

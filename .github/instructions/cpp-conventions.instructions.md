@@ -17,7 +17,7 @@ applyTo: '**/*.{cpp,h,hpp,c}'
 - **English only**: All code, comments, identifiers in English.
 - **No lazy solutions**: No empty stubs, empty `catch` blocks, or commented-out code.
 - **C++ heritage**: Maintain consistency with surrounding legacy code patterns.
-- **Change annotation**: Every user-facing code change needs `// GeneralsX @keyword author DD/MM/YYYY Description` above it.
+- **Change annotation**: New fork-owned changes use `// GeneralsArsenal @keyword author DD/MM/YYYY Description` above them. Preserve existing `// GeneralsX @keyword ...` annotations as historical upstream attribution.
   - Keywords: `@bugfix` / `@feature` / `@performance` / `@refactor` / `@tweak` / `@build`
 - **Upstream PR attribution**: When implementing work derived from a specific upstream PR, add an adjacent comment:
   - `// Upstream reference: <author>, PR #<id>` and the full GitHub URL.

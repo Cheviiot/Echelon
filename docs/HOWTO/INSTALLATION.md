@@ -1,4 +1,4 @@
-# How to Install GeneralsX
+# How to Install Generals: Arsenal
 
 ## Prerequisites
 
@@ -6,9 +6,7 @@
 
    > **On macOS or Linux?** This title is Windows-only on Steam. On macOS, Steam usually does not show an install option. On Linux, installation may be available via Steam Play/Proton depending on your configuration. See [GETTING_THE_GAME_FILES.md](GETTING_THE_GAME_FILES.md) for all supported ways to obtain game files.
 
-2. Copy the game data from your existing installation (for example, from `C:\Program Files (x86)\Steam\steamapps\common\Command & Conquer Generals - Zero Hour`) to a local folder on your Linux or macOS system. A recommended layout is:
-   - `$HOME/GeneralsX/Generals` for Command & Conquer: Generals
-   - `$HOME/GeneralsX/GeneralsZH` for Command & Conquer: Generals - Zero Hour
+2. Keep the original Generals and Zero Hour game data available on the machine. On first launch, the launcher can import a selected source directory into `$HOME/.GeneralsArsenal/Generals` or `$HOME/.GeneralsArsenal/GeneralsZH`. It does not inspect or migrate GeneralsX directories automatically.
 
 ## Linux
 
@@ -18,40 +16,21 @@
 
    Each Linux distribution packages Flatpak differently, so rely on the upstream instructions for installing the Flatpak tool itself.
 
-2. Download the Linux Flatpak release asset (`GeneralsXZH-linux-flatpak.zip` for Zero Hour, `GeneralsX-linux-flatpak.zip` for the base game) and extract it. Each zip contains a single `.flatpak` bundle at the root of the archive.
+2. Download the unified Linux Flatpak release asset (`GeneralsArsenal-linux.flatpak`). It contains the launcher and both open-source engine modules, but no retail assets.
 
 3. Install the Flatpak bundle:
 
    ```bash
-   unzip GeneralsXZH-linux-flatpak.zip
-   flatpak --user install -y ./GeneralsXZH-linux64-deploy.flatpak
+   flatpak --user install -y ./GeneralsArsenal-linux.flatpak
    ```
-
-   For the base game, use `GeneralsX-linux-flatpak.zip` and install `./GeneralsX-linux64-deploy.flatpak`.
 
 4. Launch the game with Flatpak:
 
    ```bash
-   flatpak run com.fbraz3.GeneralsXZH
+   flatpak run io.github.cheviiot.GeneralsArsenal
    ```
 
-   For the base game:
-
-   ```bash
-   flatpak run com.fbraz3.GeneralsX
-   ```
-
-5. The Flatpak package auto-detects game data in the following default locations:
-   - `$HOME/GeneralsX/GeneralsZH`
-   - `$HOME/GeneralsX/Generals`
-
-   If your assets are stored elsewhere, pass the path explicitly when launching:
-
-   ```bash
-   flatpak run --env=CNC_GENERALS_INSTALLPATH=/path/to/your/game-data com.fbraz3.GeneralsXZH -win
-   ```
-
-   The same `CNC_GENERALS_INSTALLPATH` override works for the base game package.
+5. Choose Generals or Zero Hour in the launcher. Missing profiles remain disabled until their required `.big` files are imported. Use **Game Data Settings** to select another source directory.
 
 6. The Flatpak bundle ships the required userspace runtime libraries (DXVK, SDL3, SDL3_image, OpenAL, FFmpeg, and related dependencies). You do not need to install those libraries manually on the host.
 
@@ -62,13 +41,13 @@
 1. Download the macOS `.zip` file from this release.
 2. Extract the `.zip` and copy the app bundle into your `Applications` folder.
 3. Make sure your game assets are placed in the following locations:
-   - `$HOME/GeneralsX/Generals` for Generals
-   - `$HOME/GeneralsX/GeneralsZH` for Zero Hour
+   - `$HOME/.GeneralsArsenal/Generals` for Generals
+   - `$HOME/.GeneralsArsenal/GeneralsZH` for Zero Hour
 4. Because the app is not code-signed, macOS Gatekeeper will initially block it. After the first launch attempt, go to **System Settings -> Privacy & Security** and allow the application to run.
 
 ## Requirements
 
-GeneralsX has been developed and tested primarily on the following environments:
+Generals: Arsenal inherits the GeneralsX platform stack and is developed primarily on the following environments:
 
 - Ubuntu 26.04 LTS (x86_64)
 - macOS 26 "Tahoe" on Apple Silicon (M1 / ARM64)
@@ -88,14 +67,14 @@ Support for other platforms and configurations is possible but not yet officiall
 
 ## Multiplayes features
 
-- LAN play - it's broken for now and we have a [issue](https://github.com/fbraz3/GeneralsX/issues/86) to work on that.
+- LAN play is currently incomplete; follow the [Generals: Arsenal issues](https://github.com/Cheviiot/GeneralsArsenal/issues) for current status.
 - Online features - not implemented and planned for the future.
 
 ## Known Issues & Limitations
 
-For documented limitations and known bugs, check the [issues page](https://github.com/fbraz3/GeneralsX/issues).
+For documented limitations and known bugs, check the [issues page](https://github.com/Cheviiot/GeneralsArsenal/issues).
 
-If you encounter problems while running the game, please [open an issue](https://github.com/fbraz3/GeneralsX/issues/new/choose) and include as much detail as possible, such as:
+If you encounter problems while running the game, please [open an issue](https://github.com/Cheviiot/GeneralsArsenal/issues/new/choose) and include as much detail as possible, such as:
 
 - Operating system and version
 - CPU architecture (x86_64 / ARM64)

@@ -540,6 +540,14 @@ static void SDL3_ApplyWindowModeForRenderConfig(Bool windowed, Int renderWidth, 
 {
 	extern SDL_Window* TheSDL3Window;
 	if (!TheSDL3Window) return;
+	// GeneralsArsenal @feature Codex 14/08/2026 Hosted sessions request presentation changes from the launcher instead of mutating its SDL window directly.
+	if (DX8Wrapper::Is_Window_Geometry_Externally_Owned()) {
+		if (!DX8Wrapper::Request_Externally_Owned_Window_Mode(windowed, renderWidth, renderHeight)) {
+			fprintf(stderr, "WARNING: Launcher rejected hosted Generals window mode %s %dx%d\n",
+				windowed ? "windowed" : "fullscreen", renderWidth, renderHeight);
+		}
+		return;
+	}
 
 	if (!windowed) {
 		if (!SDL_SetWindowFullscreen(TheSDL3Window, false)) {
@@ -665,11 +673,17 @@ Bool W3DDisplay::setDisplayMode( UnsignedInt xres, UnsignedInt yres, UnsignedInt
 	const UnsignedInt oldHeight = getHeight();
 	const UnsignedInt oldBitDepth = getBitDepth();
 	const Bool oldWindowed = getWindowed();
+	#ifdef SAGE_USE_SDL3
+	// GeneralsArsenal @bugfix Codex 14/08/2026 Resize the host-owned presentation before DXVK rebuilds its swapchain.
+	if (DX8Wrapper::Is_Window_Geometry_Externally_Owned()) {
+		SDL3_ApplyWindowModeForRenderConfig(windowed, xres, yres);
+	}
+	#endif
 
 	if (WW3D_ERROR_OK == WW3D::Set_Device_Resolution(xres,yres,bitdepth,windowed,true))
 	{
 		#ifdef SAGE_USE_SDL3
-		SDL3_ApplyWindowModeForRenderConfig(windowed, xres, yres);
+		if (!DX8Wrapper::Is_Window_Geometry_Externally_Owned()) SDL3_ApplyWindowModeForRenderConfig(windowed, xres, yres);
 		#endif
 		Render2DClass::Set_Screen_Resolution(RectClass(0, 0, xres, yres));
 		Display::setDisplayMode(xres, yres, bitdepth, windowed);
@@ -678,6 +692,11 @@ Bool W3DDisplay::setDisplayMode( UnsignedInt xres, UnsignedInt yres, UnsignedInt
 
 	//set back to the original mode.
 	WW3D::Set_Device_Resolution(oldWidth, oldHeight, oldBitDepth, oldWindowed, true);
+	#ifdef SAGE_USE_SDL3
+	if (DX8Wrapper::Is_Window_Geometry_Externally_Owned()) {
+		SDL3_ApplyWindowModeForRenderConfig(oldWindowed, oldWidth, oldHeight);
+	}
+	#endif
 	Render2DClass::Set_Screen_Resolution(RectClass(0, 0, oldWidth, oldHeight));
 	Display::setDisplayMode(oldWidth, oldHeight, oldBitDepth, oldWindowed);
 	return FALSE;	//did not change to a new mode.

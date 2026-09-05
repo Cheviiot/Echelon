@@ -1,0 +1,57 @@
+name: Check GeneralsX Upstream
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    name: Compare main with fbraz3/GeneralsX
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Arsenal history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch GeneralsX upstream
+        run: |
+          git remote add upstream https://github.com/fbraz3/GeneralsX.git
+          git fetch --prune --no-tags upstream main
+
+      - name: Report incoming commits
+        run: |
+          COUNT=$(git rev-list --count HEAD..upstream/main)
+          UPSTREAM_SHA=$(git rev-parse upstream/main)
+          LOCAL_SHA=$(git rev-parse HEAD)
+
+          {
+            echo "## GeneralsX upstream status"
+            echo ""
+            echo "- Arsenal main: \`${LOCAL_SHA}\`"
+            echo "- GeneralsX main: \`${UPSTREAM_SHA}\`"
+            echo "- New upstream commits: **${COUNT}**"
+            echo ""
+            if [ "${COUNT}" -gt 0 ]; then
+              echo "### Incoming commits"
+              echo ""
+              git log --no-merges --date=short --pretty="- \`%h\` %ad %s (%an)" HEAD..upstream/main
+              echo ""
+              echo "### Changed top-level paths"
+              echo ""
+              git diff --name-only HEAD...upstream/main \
+                | awk -F/ 'NF { count[$1]++ } END { for (path in count) printf "- `%s`: %d files\n", path, count[path] }' \
+                | sort
+              echo ""
+              echo "Create a reviewed \`generalsx-sync-MM-DD-YYYY\` branch; this workflow never merges or pushes."
+            else
+              echo "Arsenal already contains the current GeneralsX main history."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "GeneralsX upstream has ${COUNT} commit(s) not present in Arsenal main."

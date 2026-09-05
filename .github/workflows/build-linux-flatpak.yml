@@ -34,16 +34,11 @@ jobs:
       fail-fast: false
       matrix:
         game:
-          - id: generalsxzh
-            value: GeneralsMD
-            target: z_generals
-            output: GeneralsXZH
-            log_suffix: zh
-          - id: generalsx
-            value: Generals
-            target: g_generals
-            output: GeneralsX
-            log_suffix: generals
+          - id: generals-arsenal
+            value: Arsenal
+            target: generals_arsenal_launcher
+            output: GeneralsArsenal
+            log_suffix: arsenal
 
     steps:
       # GeneralsX @build GitHubCopilot 08/05/2026 Use Node 24 compatible GitHub Actions major versions to remove runner deprecation warnings.
@@ -80,7 +75,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .flatpak-builder
-          key: flatpak-builder-${{ runner.os }}-${{ inputs.preset }}-${{ hashFiles('flatpak/com.fbraz3.GeneralsX.yml', 'flatpak/com.fbraz3.GeneralsXZH.yml', 'scripts/build/linux/build-linux-flatpak.sh', 'cmake/lzhl.cmake', 'CMakeLists.txt') }}
+          key: flatpak-builder-${{ runner.os }}-${{ inputs.preset }}-${{ hashFiles('flatpak/io.github.cheviiot.GeneralsArsenal.yml', 'scripts/build/linux/build-linux-flatpak.sh', 'cmake/lzhl.cmake', 'CMakeLists.txt') }}
           restore-keys: |
             flatpak-builder-${{ runner.os }}-${{ inputs.preset }}-
 

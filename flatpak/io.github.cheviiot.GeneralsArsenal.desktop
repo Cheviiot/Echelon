@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Generals: Arsenal
+Name[ru]=Generals: Arsenal
+Comment=Unified launcher for Generals and Zero Hour
+Comment[ru]=Единый лаунчер Generals и Zero Hour
+Icon=io.github.cheviiot.GeneralsArsenal
+Exec=generals-arsenal-wrapper.sh
+Type=Application
+Categories=Game;StrategyGame;
+StartupNotify=true
+Terminal=false
+

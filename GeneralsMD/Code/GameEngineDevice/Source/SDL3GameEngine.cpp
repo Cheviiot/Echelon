@@ -53,6 +53,7 @@
 #include "StdDevice/Common/StdLocalFileSystem.h"
 #include "StdDevice/Common/StdBIGFileSystem.h"
 #include "Common/GlobalData.h"
+#include "GeneralsArsenalLauncher/EngineModuleAPI.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 #include <cstdio>
@@ -215,6 +216,10 @@ void SDL3GameEngine::reset(void)
 void SDL3GameEngine::update(void)
 {
 	pollSDL3Events();
+	// GeneralsArsenal @feature Codex 13/08/2026 Drive repeatable launcher lifecycle tests without desktop input injection.
+	if (GeneralsArsenalConsumeTestReturnRequest()) {
+		m_quitting = true;
+	}
 	GameEngine::update();
 }
 
@@ -592,4 +597,3 @@ AudioManager *SDL3GameEngine::createAudioManager(Bool dummy)
 }
 
 #endif // !_WIN32
-

@@ -143,11 +143,13 @@ public:
 class SubsystemInterfaceList
 {
 public:
+	typedef void (*SingletonClearFunction)(void *singletonStorage);
 
 	SubsystemInterfaceList();
 	~SubsystemInterfaceList();
 
-	void initSubsystem(SubsystemInterface* sys, const char* path1, const char* path2, Xfer *pXfer, AsciiString name="");
+	void initSubsystem(SubsystemInterface* sys, const char* path1, const char* path2, Xfer *pXfer, AsciiString name="",
+		void *singletonStorage = nullptr, SingletonClearFunction clearSingleton = nullptr);
 	void addSubsystem(SubsystemInterface* sys);
 	void removeSubsystem(SubsystemInterface* sys);
 	void postProcessLoadAll();
@@ -158,9 +160,16 @@ public:
 #endif
 
 private:
+	struct SubsystemRegistration
+	{
+		SubsystemInterface *subsystem;
+		void *singletonStorage;
+		SingletonClearFunction clearSingleton;
+	};
 
 	typedef std::vector<SubsystemInterface*> SubsystemList;
 	SubsystemList m_subsystems;
+	std::vector<SubsystemRegistration> m_registrations;
 	SubsystemList m_allSubsystems;
 
 };

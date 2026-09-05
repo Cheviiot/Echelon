@@ -43,11 +43,16 @@
 #include "Common/CommandLine.h"
 #include "Common/CriticalSection.h"
 #include "Common/GlobalData.h"
+#include "Common/FramePacer.h"
 #include "Common/GameEngine.h"
 #include "Common/GameMemory.h"
 #include "Common/Debug.h"
 #include "Common/version.h"  // GeneralsX @bugfix BenderAI 14/02/2026 Version class + TheVersion extern
+#include "GeneralsArsenalLauncher/ContentLayerRuntime.h"
+#include "GeneralsArsenalLauncher/EngineModuleAPI.h"
 #include "SDL3GameEngine.h"
+#include "WW3D2/dx8wrapper.h"
+#include "WW3D2/ww3d.h"
 
 // DXVK WSI
 #define DXVK_WSI_SDL3 1
@@ -77,6 +82,34 @@ HWND ApplicationHWnd = nullptr;  ///< our application window handle
 // GeneralsX @feature felipebraz 16/02/2026
 // SDL3 window created in main() before GameMain(), stored globally for engine access
 SDL_Window* TheSDL3Window = nullptr;
+
+// GeneralsX @feature Codex 11/08/2026 Track whether the current engine session should return to the universal launcher.
+static bool s_generalsArsenalLauncherSession = false;
+static bool s_generalsArsenalReturnRequested = false;
+static uint32_t s_generalsArsenalTestReturnUpdates = 0;
+static uint32_t s_generalsArsenalQuiescenceFlags = GENERALS_ARSENAL_ENGINE_REQUIRED_QUIESCENCE_FLAGS;
+
+void GeneralsArsenalRequestReturnToLauncher()
+{
+	s_generalsArsenalReturnRequested = true;
+}
+
+bool GeneralsArsenalIsLauncherSession()
+{
+	return s_generalsArsenalLauncherSession;
+}
+
+bool GeneralsArsenalConsumeTestReturnRequest()
+{
+	if (s_generalsArsenalTestReturnUpdates == 0) {
+		return false;
+	}
+	if (--s_generalsArsenalTestReturnUpdates != 0) {
+		return false;
+	}
+	s_generalsArsenalReturnRequested = true;
+	return true;
+}
 
 // GAME TEXT FILE PATHS
 // TheSuperHackers @build felipebraz 13/02/2026
@@ -232,6 +265,7 @@ GameEngine *CreateGameEngine(void)
  * @param argv Command line arguments
  * @return Exit code (0 = success)
  */
+#if !defined(GENERALS_ARSENAL_ENGINE_MODULE)
 int main(int argc, char* argv[])
 {
 	int exitcode = 1;
@@ -396,5 +430,205 @@ int main(int argc, char* argv[])
 	// _exit() matches that behavior. Explicit cleanup already done above (SDL_Quit, shutdownMemoryManager).
 	_exit(exitcode);
 }
+
+#else
+
+// GeneralsX @feature Codex 11/08/2026 Keep legacy memory pools alive across launcher sessions.
+static bool s_generalsArsenalModuleInitialized = false;
+
+static void GeneralsArsenalModuleLog(const GeneralsArsenalEngineHostV2 *host, const char *message)
+{
+	if (host && host->log_callback) {
+		host->log_callback(host->log_user_data, message);
+	}
+	fprintf(stderr, "%s\n", message);
+	fflush(stderr);
+}
+
+static bool GeneralsArsenalModuleInitialize(const GeneralsArsenalEngineHostV2 *host)
+{
+	if (s_generalsArsenalModuleInitialized) {
+		return true;
+	}
+
+	TheAsciiStringCriticalSection = &critSec1;
+	TheUnicodeStringCriticalSection = &critSec2;
+	TheDmaCriticalSection = &critSec3;
+	TheMemoryPoolCriticalSection = &critSec4;
+	TheDebugLogCriticalSection = &critSec5;
+
+	initMemoryManager();
+	TheVersion = NEW Version;
+	s_generalsArsenalModuleInitialized = true;
+	GeneralsArsenalModuleLog(host, "INFO: Generals engine module initialized");
+	return true;
+}
+
+static void GeneralsArsenalModulePhase(
+	const GeneralsArsenalEngineHostV2 *host, GeneralsArsenalEnginePhaseV2 phase, const char *message)
+{
+	if (host && host->phase_callback) {
+		host->phase_callback(host->phase_user_data, phase, message);
+	}
+}
+
+static uint32_t GeneralsArsenalCollectQuiescenceFlags()
+{
+	uint32_t flags = 0;
+	if (!TheGameEngine) flags |= GENERALS_ARSENAL_ENGINE_QUIESCENCE_GAME_ENGINE_RELEASED;
+	if (!TheFramePacer) flags |= GENERALS_ARSENAL_ENGINE_QUIESCENCE_FRAME_PACER_RELEASED;
+	if (!WW3D::Is_Initted()) flags |= GENERALS_ARSENAL_ENGINE_QUIESCENCE_WW3D_RELEASED;
+	if (!DX8Wrapper::Is_Initted() && !DX8Wrapper::_Get_D3D_Device8() && !DX8Wrapper::_Get_D3D8() &&
+		DX8Wrapper::Get_Last_Device_Release_Count() == 0) {
+		flags |= GENERALS_ARSENAL_ENGINE_QUIESCENCE_DX8_RELEASED;
+	}
+	if (!TheSDL3Window && !ApplicationHWnd) flags |= GENERALS_ARSENAL_ENGINE_QUIESCENCE_WINDOW_DETACHED;
+	if (GeneralsArsenalAreEngineSubsystemSingletonsReleased()) {
+		flags |= GENERALS_ARSENAL_ENGINE_QUIESCENCE_SUBSYSTEM_SINGLETONS_RELEASED;
+	}
+	if (GeneralsArsenalContentRuntime::IsClear()) flags |= GENERALS_ARSENAL_ENGINE_QUIESCENCE_CONTENT_LAYERS_RELEASED;
+	return flags;
+}
+
+static uint32_t GeneralsArsenalModuleQueryQuiescence(GeneralsArsenalEngineQuiescenceReportV2 *report)
+{
+	const uint32_t flags = GeneralsArsenalCollectQuiescenceFlags();
+	if (report && report->struct_size >= sizeof(GeneralsArsenalEngineQuiescenceReportV2)) {
+		report->flags = flags;
+	}
+	return flags;
+}
+
+// GeneralsArsenal @feature Codex 14/08/2026 Bridge SAGE display changes to the launcher-owned SDL window coordinator.
+static bool GeneralsArsenalRequestWindowMode(void *userData, bool windowed, int renderWidth, int renderHeight)
+{
+	const GeneralsArsenalEngineHostV2 *host = static_cast<const GeneralsArsenalEngineHostV2 *>(userData);
+	return host && host->window_mode_callback &&
+		host->window_mode_callback(host->window_mode_user_data, windowed ? 1u : 0u,
+			static_cast<uint32_t>(renderWidth), static_cast<uint32_t>(renderHeight)) != 0;
+}
+
+static GeneralsArsenalEngineResultV2 GeneralsArsenalModuleRun(const GeneralsArsenalEngineHostV2 *host)
+{
+	if (!host || host->struct_size < sizeof(GeneralsArsenalEngineHostV2) || host->abi_version != GENERALS_ARSENAL_ENGINE_ABI_VERSION) {
+		return GENERALS_ARSENAL_ENGINE_FATAL_ERROR;
+	}
+
+	try {
+		GeneralsArsenalModulePhase(host, GENERALS_ARSENAL_ENGINE_PHASE_STARTING, "Generals session is starting");
+		std::string contentError;
+		if (!GeneralsArsenalContentRuntime::Configure(host->content_layers, host->content_layer_count, contentError)) {
+			GeneralsArsenalModuleLog(host, contentError.c_str());
+			GeneralsArsenalModulePhase(host, GENERALS_ARSENAL_ENGINE_PHASE_FAILED, "Generals content stack validation failed");
+			return GENERALS_ARSENAL_ENGINE_FATAL_ERROR;
+		}
+		if (!GeneralsArsenalModuleInitialize(host)) {
+			GeneralsArsenalContentRuntime::Clear();
+			GeneralsArsenalModulePhase(host, GENERALS_ARSENAL_ENGINE_PHASE_FAILED, "Generals module initialization failed");
+			return GENERALS_ARSENAL_ENGINE_FATAL_ERROR;
+		}
+
+		__argc = host->argc;
+		__argv = host->argv;
+		TheSDL3Window = static_cast<SDL_Window *>(host->sdl_window);
+		ApplicationHWnd = reinterpret_cast<HWND>(TheSDL3Window);
+		s_generalsArsenalLauncherSession = host->headless == 0;
+		// GeneralsArsenal @feature Codex 14/08/2026 Honor the host-owned window contract before any WW3D/DXVK initialization can resize it.
+		DX8Wrapper::Set_Window_Geometry_Externally_Owned(
+			host->struct_size >= sizeof(GeneralsArsenalEngineHostV2) &&
+			host->window_policy == GENERALS_ARSENAL_ENGINE_WINDOW_POLICY_HOST_OWNED);
+		DX8Wrapper::Set_Window_Mode_Request_Callback(
+			DX8Wrapper::Is_Window_Geometry_Externally_Owned() ? GeneralsArsenalRequestWindowMode : nullptr,
+			DX8Wrapper::Is_Window_Geometry_Externally_Owned() ? const_cast<GeneralsArsenalEngineHostV2 *>(host) : nullptr);
+		s_generalsArsenalReturnRequested = false;
+		s_generalsArsenalTestReturnUpdates = host->internal_test_return_after_updates;
+		s_generalsArsenalQuiescenceFlags = 0;
+
+		if (host->asset_root && host->asset_root[0]) {
+			setenv("CNC_GENERALS_INSTALLPATH", host->asset_root, 1);
+			setenv("CNC_GENERALS_PATH", host->asset_root, 1);
+		}
+		if (host->user_data_root && host->user_data_root[0]) {
+			setenv("GENERALS_ARSENAL_USER_DATA_ROOT", host->user_data_root, 1);
+		}
+
+		CommandLine::parseCommandLineForStartup();
+		GeneralsArsenalModulePhase(host, GENERALS_ARSENAL_ENGINE_PHASE_RUNNING, "Generals session is running");
+		const Int exitCode = GameMain();
+		GeneralsArsenalModulePhase(host, GENERALS_ARSENAL_ENGINE_PHASE_STOPPING, "Generals session is stopping");
+
+		TheSDL3Window = nullptr;
+		ApplicationHWnd = nullptr;
+		s_generalsArsenalLauncherSession = false;
+		DX8Wrapper::Set_Window_Mode_Request_Callback(nullptr, nullptr);
+		DX8Wrapper::Set_Window_Geometry_Externally_Owned(false);
+		s_generalsArsenalTestReturnUpdates = 0;
+		GeneralsArsenalContentRuntime::Clear();
+		s_generalsArsenalQuiescenceFlags = GeneralsArsenalCollectQuiescenceFlags();
+		if ((s_generalsArsenalQuiescenceFlags & GENERALS_ARSENAL_ENGINE_REQUIRED_QUIESCENCE_FLAGS) !=
+			GENERALS_ARSENAL_ENGINE_REQUIRED_QUIESCENCE_FLAGS) {
+			GeneralsArsenalModuleLog(host, "ERROR: Generals engine did not reach a quiescent state");
+			GeneralsArsenalModulePhase(host, GENERALS_ARSENAL_ENGINE_PHASE_FAILED, "Generals teardown is incomplete");
+			return GENERALS_ARSENAL_ENGINE_FATAL_ERROR;
+		}
+		GeneralsArsenalModulePhase(host, GENERALS_ARSENAL_ENGINE_PHASE_QUIESCENT, "Generals session is quiescent");
+
+		if (exitCode != 0) {
+			GeneralsArsenalModuleLog(host, "ERROR: Generals engine session failed");
+			return GENERALS_ARSENAL_ENGINE_FATAL_ERROR;
+		}
+		return s_generalsArsenalReturnRequested ? GENERALS_ARSENAL_ENGINE_RETURN_TO_LAUNCHER : GENERALS_ARSENAL_ENGINE_EXIT_APPLICATION;
+	} catch (const std::exception &error) {
+		fprintf(stderr, "FATAL: Generals module exception: %s\n", error.what());
+		fflush(stderr);
+	} catch (...) {
+		GeneralsArsenalModuleLog(host, "FATAL: Unknown Generals module exception");
+	}
+
+	TheSDL3Window = nullptr;
+	ApplicationHWnd = nullptr;
+	s_generalsArsenalLauncherSession = false;
+	DX8Wrapper::Set_Window_Mode_Request_Callback(nullptr, nullptr);
+	DX8Wrapper::Set_Window_Geometry_Externally_Owned(false);
+	s_generalsArsenalTestReturnUpdates = 0;
+	GeneralsArsenalContentRuntime::Clear();
+	s_generalsArsenalQuiescenceFlags = GeneralsArsenalCollectQuiescenceFlags();
+	GeneralsArsenalModulePhase(host, GENERALS_ARSENAL_ENGINE_PHASE_FAILED, "Generals session failed");
+	return GENERALS_ARSENAL_ENGINE_FATAL_ERROR;
+}
+
+static void GeneralsArsenalModuleShutdown()
+{
+	if (!s_generalsArsenalModuleInitialized) {
+		return;
+	}
+	if (TheVersion) {
+		delete TheVersion;
+		TheVersion = nullptr;
+	}
+	shutdownMemoryManager();
+	TheAsciiStringCriticalSection = nullptr;
+	TheUnicodeStringCriticalSection = nullptr;
+	TheDmaCriticalSection = nullptr;
+	TheMemoryPoolCriticalSection = nullptr;
+	TheDebugLogCriticalSection = nullptr;
+	s_generalsArsenalModuleInitialized = false;
+}
+
+GENERALS_ARSENAL_ENGINE_EXPORT const GeneralsArsenalEngineModuleV2 *GeneralsArsenal_GetEngineModuleV2(void)
+{
+	static const GeneralsArsenalEngineModuleV2 module = {
+		sizeof(GeneralsArsenalEngineModuleV2),
+		GENERALS_ARSENAL_ENGINE_ABI_VERSION,
+		"generals",
+		"Command & Conquer: Generals",
+		&GeneralsArsenalModuleRun,
+		&GeneralsArsenalModuleQueryQuiescence,
+		&GeneralsArsenalModuleShutdown
+	};
+	return &module;
+}
+
+#endif
 
 #endif // !_WIN32

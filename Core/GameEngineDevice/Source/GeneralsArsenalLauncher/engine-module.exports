@@ -1,0 +1,6 @@
+{
+  global:
+    GeneralsArsenal_GetEngineModuleV2;
+  local:
+    *;
+};

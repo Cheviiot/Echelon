@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: "Release version tag (e.g., GeneralsX-Beta-3)"
+        description: "Release version tag (e.g., GeneralsArsenal-Beta-1)"
         required: true
         type: string
       release_mode:
@@ -142,7 +142,7 @@ jobs:
         run: |
           CURRENT_TAG="${{ inputs.release_version }}"
           # GeneralsX @bugfix GitHubCopilot 21/04/2026 Exclude the in-flight release tag so changelog compares against the previous published release.
-          LATEST_TAG=$(git tag -l "GeneralsX*" --sort=-version:refname --merged HEAD | grep -Fxv "$CURRENT_TAG" | head -1)
+          LATEST_TAG=$(git tag -l "GeneralsArsenal*" --sort=-version:refname --merged HEAD | grep -Fxv "$CURRENT_TAG" | head -1)
           if [ -z "$LATEST_TAG" ]; then
             echo "latest_tag=" >> "$GITHUB_OUTPUT"
             echo "latest_tag_date=" >> "$GITHUB_OUTPUT"
@@ -154,29 +154,11 @@ jobs:
             echo "first_release=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Download Linux Zero Hour Flatpak artifact
+      - name: Download unified Linux Flatpak artifact
         uses: actions/download-artifact@v8
         with:
-          name: linux-flatpak-generalsxzh-linux64-deploy
-          path: artifacts/linux-flatpak-zh
-
-      - name: Download Linux Generals Flatpak artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: linux-flatpak-generalsx-linux64-deploy
-          path: artifacts/linux-flatpak-generals
-
-      - name: Download macOS bundle artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: macos-generalsxzh-app
-          path: artifacts/macos
-
-      - name: Download macOS Generals bundle artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: macos-generalsx-app
-          path: artifacts/macos-generals
+          name: linux-flatpak-generals-arsenal-linux64-deploy
+          path: artifacts/linux-flatpak
 
       - name: Normalize bundle files for release assets
         id: assets
@@ -185,57 +167,23 @@ jobs:
         run: |
           mkdir -p release-assets
 
-          LINUX_ZH_FLATPAK=$(find artifacts/linux-flatpak-zh -name "*.flatpak" | head -1)
-          if [ -z "$LINUX_ZH_FLATPAK" ] || [ ! -f "$LINUX_ZH_FLATPAK" ]; then
-            echo "ERROR: Linux ZH Flatpak bundle not found in artifacts/linux-flatpak-zh"
-            find artifacts/linux-flatpak-zh -maxdepth 3 -type f || true
-            exit 1
-          fi
-
-          LINUX_GENERALS_FLATPAK=$(find artifacts/linux-flatpak-generals -name "*.flatpak" | head -1)
-          if [ -z "$LINUX_GENERALS_FLATPAK" ] || [ ! -f "$LINUX_GENERALS_FLATPAK" ]; then
-            echo "ERROR: Linux Generals Flatpak bundle not found in artifacts/linux-flatpak-generals"
-            find artifacts/linux-flatpak-generals -maxdepth 3 -type f || true
-            exit 1
-          fi
-
-          MAC_TAR=$(find artifacts/macos -name "*.tar" | head -1)
-          if [ -z "$MAC_TAR" ] || [ ! -f "$MAC_TAR" ]; then
-            echo "ERROR: macOS app tar not found in artifacts/macos"
-            find artifacts/macos -maxdepth 3 -type f || true
-            exit 1
-          fi
-
-          cp "$MAC_TAR" release-assets/GeneralsXZH-macos-arm64.app.tar
-          zip -j release-assets/macos-generalsxzh-app.tar.zip release-assets/GeneralsXZH-macos-arm64.app.tar
-
-          MAC_GENERALS_TAR=$(find artifacts/macos-generals -name "*.tar" | head -1)
-          if [ -z "$MAC_GENERALS_TAR" ] || [ ! -f "$MAC_GENERALS_TAR" ]; then
-            echo "ERROR: macOS Generals app tar not found in artifacts/macos-generals"
-            find artifacts/macos-generals -maxdepth 3 -type f || true
+          LINUX_FLATPAK=$(find artifacts/linux-flatpak -name "*.flatpak" | head -1)
+          if [ -z "$LINUX_FLATPAK" ] || [ ! -f "$LINUX_FLATPAK" ]; then
+            echo "ERROR: Unified Linux Flatpak bundle not found in artifacts/linux-flatpak"
+            find artifacts/linux-flatpak -maxdepth 3 -type f || true
             exit 1
           fi
 
           if [ "$RELEASE_MODE" = "Dry Run" ]; then
             echo "Dry run enabled: skipping zip normalization to avoid large preview artifacts."
-            echo "linux_generals_asset=" >> "$GITHUB_OUTPUT"
             echo "linux_asset=" >> "$GITHUB_OUTPUT"
-            echo "macos_generals_asset=" >> "$GITHUB_OUTPUT"
-            echo "macos_asset=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           # GeneralsX @build GitHubCopilot 14/04/2026 Linux release now ships native Flatpak bundles instead of zip wrappers.
-          cp "$LINUX_ZH_FLATPAK" release-assets/GeneralsXZH-linux.flatpak
-          cp "$LINUX_GENERALS_FLATPAK" release-assets/GeneralsX-linux.flatpak
+          cp "$LINUX_FLATPAK" release-assets/GeneralsArsenal-linux.flatpak
 
-          cp "$MAC_GENERALS_TAR" release-assets/GeneralsX-macos-arm64.app.tar
-          zip -j release-assets/macos-generalsx-app.tar.zip release-assets/GeneralsX-macos-arm64.app.tar
-
-          echo "linux_generals_asset=$GITHUB_WORKSPACE/release-assets/GeneralsX-linux.flatpak" >> "$GITHUB_OUTPUT"
-          echo "linux_asset=$GITHUB_WORKSPACE/release-assets/GeneralsXZH-linux.flatpak" >> "$GITHUB_OUTPUT"
-          echo "macos_generals_asset=$GITHUB_WORKSPACE/release-assets/macos-generalsx-app.tar.zip" >> "$GITHUB_OUTPUT"
-          echo "macos_asset=$GITHUB_WORKSPACE/release-assets/macos-generalsxzh-app.tar.zip" >> "$GITHUB_OUTPUT"
+          echo "linux_asset=$GITHUB_WORKSPACE/release-assets/GeneralsArsenal-linux.flatpak" >> "$GITHUB_OUTPUT"
 
       - name: Build changelog from local PRs only
         id: changelog
@@ -295,7 +243,7 @@ jobs:
           mkdir -p release-assets
 
           {
-            echo "> This is a **beta** release. Some bugs are still expected. If you run into any problems, please [open an issue](https://github.com/fbraz3/GeneralsX/issues) so we can investigate."
+            echo "> This is a **beta** release. Some bugs are still expected. If you run into any problems, please [open an issue](https://github.com/Cheviiot/GeneralsArsenal/issues) so we can investigate."
             echo ""
             if [ "${{ inputs.release_mode }}" = "Draft" ]; then
               echo "# What's New"
@@ -305,12 +253,13 @@ jobs:
             fi
             echo "# Getting Started"
             echo ""
-            echo "**Install the engine:** Follow the [Installation Guide](https://github.com/fbraz3/GeneralsX/blob/main/docs/HOWTO/INSTALLATION.md) to set up GeneralsX on your platform."
+            echo "**Install the engine:** Follow the [Installation Guide](https://github.com/Cheviiot/GeneralsArsenal/blob/main/docs/HOWTO/INSTALLATION.md) to set up Generals: Arsenal on your platform."
             echo ""
-            echo "## Community Ports based on GeneralsX"
+            echo "## GeneralsX lineage and community ports"
             echo ""
-            echo "If you like GeneralsX, please also take a look into these projects"
+            echo "Generals: Arsenal is a GeneralsX fork. Please also take a look at the upstream and related ports."
             echo ""
+            echo "* [GeneralsX](https://github.com/fbraz3/GeneralsX) - upstream cross-platform port"
             echo "* [Generals-Mac-iOS-iPad](https://github.com/ammaarreshi/Generals-Mac-iOS-iPad) - iOS port by [ammaarreshi](https://github.com/ammaarreshi)"
             echo "* [Generals-Android](https://github.com/fadi-labib/Generals-Android) - Android port by [fadi-labib](https://github.com/fadi-labib)"
             echo "* [GeneralsXWeb](https://github.com/meerzulee/GeneralsXWeb) - Web port by [meerzulee](https://github.com/meerzulee)"
@@ -319,7 +268,7 @@ jobs:
             cat "$PR_LINES_FILE"
             echo ""
             if [ -n "$LATEST_TAG" ]; then
-              echo "**Full Changelog**: https://github.com/fbraz3/GeneralsX/compare/${LATEST_TAG}...${CURRENT_TAG}"
+              echo "**Full Changelog**: https://github.com/Cheviiot/GeneralsArsenal/compare/${LATEST_TAG}...${CURRENT_TAG}"
             fi
           } > "$NOTES_FILE"
 
@@ -349,12 +298,9 @@ jobs:
 
           gh release create "${{ inputs.release_version }}" \
             $DRAFT_FLAG \
-            --title "GeneralsX - ${{ inputs.release_version }}" \
+            --title "Generals: Arsenal - ${{ inputs.release_version }}" \
             --notes-file "${{ steps.notes.outputs.notes_file }}" \
-            "${{ steps.assets.outputs.linux_generals_asset }}" \
-            "${{ steps.assets.outputs.linux_asset }}" \
-            "${{ steps.assets.outputs.macos_generals_asset }}" \
-            "${{ steps.assets.outputs.macos_asset }}"
+            "${{ steps.assets.outputs.linux_asset }}"
 
       - name: Summary
         run: |
@@ -362,10 +308,8 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Tag: ${{ inputs.release_version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Mode: ${{ inputs.release_mode }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Linux asset (Generals): GeneralsX-linux.flatpak" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Linux asset: GeneralsXZH-linux.flatpak" >> "$GITHUB_STEP_SUMMARY"
-          echo "- macOS asset (Generals): macos-generalsx-app.tar.zip" >> "$GITHUB_STEP_SUMMARY"
-          echo "- macOS asset: macos-generalsxzh-app.tar.zip" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Linux universal asset: GeneralsArsenal-linux.flatpak" >> "$GITHUB_STEP_SUMMARY"
+          echo "- macOS engine builds: validation only until the unified Arsenal app bundle is ready" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
           if [ "${{ inputs.release_mode }}" = "Dry Run" ]; then

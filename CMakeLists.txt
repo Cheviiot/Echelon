@@ -24,6 +24,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
 include(FeatureSummary)
 include(CMakeDependentOption)
+include(cmake/brand.cmake)
 
 # We don't support in tree builds, so help people make the right choice.
 if (CMAKE_BINARY_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -32,6 +33,11 @@ endif()
 
 # Top level project, doesn't really affect anything.
 project(genzh LANGUAGES C CXX)
+
+# GeneralsX @build Codex 11/08/2026 Static engine libraries must be PIC when linked into universal runtime modules.
+if(RTS_BUILD_UNIVERSAL_LAUNCHER)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
 
 # GeneralsX @build BenderAI 10/02/2026
 # Linux port: Make CompatLib headers globally accessible so Core libraries (WWLib, WWMath, etc.)
@@ -154,6 +160,18 @@ if(RTS_BUILD_GENERALS)
     if(TARGET sage_patch)
         add_dependencies(g_generals sage_patch)
     endif()
+endif()
+
+# GeneralsX @build Codex 11/08/2026 Configure the host after both engine-module targets exist.
+if(RTS_BUILD_UNIVERSAL_LAUNCHER)
+    if(NOT SAGE_USE_SDL3 OR NOT UNIX)
+        message(FATAL_ERROR "RTS_BUILD_UNIVERSAL_LAUNCHER requires an SDL3 Linux/macOS build")
+    endif()
+    if(NOT RTS_BUILD_GENERALS OR NOT RTS_BUILD_ZEROHOUR)
+        message(FATAL_ERROR "RTS_BUILD_UNIVERSAL_LAUNCHER requires both Generals and Zero Hour")
+    endif()
+    include(cmake/mod-launcher-dependencies.cmake)
+    add_subdirectory(Core/GameEngineDevice/Source/GeneralsArsenalLauncher)
 endif()
 
 feature_summary(WHAT ENABLED_FEATURES DESCRIPTION "Enabled features:")

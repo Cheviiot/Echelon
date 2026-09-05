@@ -3276,6 +3276,7 @@ void STLSpecialAlloc::deallocate(void* __p, size_t)
 /**
 	overload for global operator new; send requests to TheDynamicMemoryAllocator.
 */
+#if !defined(GENERALS_ARSENAL_ENGINE_MODULE_ALLOCATOR)
 void *operator new(size_t size)
 {
 	++theLinkTester;
@@ -3319,6 +3320,26 @@ void operator delete[](void *p)
 	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != nullptr, ("must init memory manager before calling global operator delete"));
 	TheDynamicMemoryAllocator->freeBytes(p);
 }
+
+#if !defined(_WIN32)
+// GeneralsX @bugfix Codex 11/08/2026 Keep C++14 sized deallocation paired with the game allocator.
+void operator delete(void *p, size_t) noexcept
+{
+	++theLinkTester;
+	preMainInitMemoryManager();
+	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != nullptr, ("must init memory manager before calling sized global operator delete"));
+	TheDynamicMemoryAllocator->freeBytes(p);
+}
+
+void operator delete[](void *p, size_t) noexcept
+{
+	++theLinkTester;
+	preMainInitMemoryManager();
+	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != nullptr, ("must init memory manager before calling sized global operator delete[]"));
+	TheDynamicMemoryAllocator->freeBytes(p);
+}
+#endif
+#endif // !GENERALS_ARSENAL_ENGINE_MODULE_ALLOCATOR
 
 //-----------------------------------------------------------------------------
 /**
@@ -3383,7 +3404,7 @@ void operator delete[](void * p, const char *, int)
 // movaps instructions in library constructors crash on pool-allocated memory.
 // These overloads bypass the pool and use posix_memalign for such allocations.
 // GeneralsX @bugfix 09/03/2026
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(GENERALS_ARSENAL_ENGINE_MODULE_ALLOCATOR)
 #include <new>
 #include <cstdlib>
 
@@ -3422,7 +3443,7 @@ void operator delete[](void *p, size_t, std::align_val_t) noexcept
 {
 	::free(p);
 }
-#endif // !_WIN32
+#endif // !_WIN32 && !GENERALS_ARSENAL_ENGINE_MODULE_ALLOCATOR
 
 //-----------------------------------------------------------------------------
 #ifdef MEMORYPOOL_OVERRIDE_MALLOC

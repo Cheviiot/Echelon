@@ -26,6 +26,9 @@
 #include "Common/GlobalData.h"
 
 #include "gitinfo.h"
+#ifdef GENERALS_ARSENAL_BRAND
+#include "GeneralsArsenalLauncher/BrandIdentity.h"
+#endif
 
 #include <SDL3/SDL.h>
 #include <curl/curl.h>
@@ -50,7 +53,12 @@ static char          s_latestTag[128] = {0};
 // ---------------------------------------------------------------------------
 const char* UpdateChecker::getReleasesUrl()
 {
+#ifdef GENERALS_ARSENAL_BRAND
+    // GeneralsArsenal @feature Codex 13/08/2026 Query the fork's release channel while retaining the upstream checker.
+    return GeneralsArsenalBrand::kReleaseApiUrl;
+#else
     return "https://api.github.com/repos/fbraz3/GeneralsX/releases/latest";
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -160,7 +168,11 @@ static int SDLCALL threadFunc(void* /*userData*/)
     }
 
     curl_easy_setopt(curl, CURLOPT_URL, UpdateChecker::getReleasesUrl());
+#ifdef GENERALS_ARSENAL_BRAND
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, GeneralsArsenalBrand::kUpdateUserAgent);
+#else
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "GeneralsX/update-checker");
+#endif
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBody);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 8L);         // total timeout (s)
@@ -288,8 +300,12 @@ void UpdateChecker::start()
     // GeneralsX @bugfix GitHubCopilot 07/05/2026 Accept clean release builds that
     // provide either an exact tag OR a valid commit timestamp (tag may be empty in
     // some packaged CI contexts even when the binary is a real release artifact).
-    // Set env var GENERALS_FORCE_UPDATE_CHECK=1 to bypass release guards (for testing).
+    // Set the product-specific environment variable to bypass release guards for testing.
+#ifdef GENERALS_ARSENAL_BRAND
+    const bool forceCheck = SDL_getenv("GENERALS_ARSENAL_FORCE_UPDATE_CHECK") != nullptr;
+#else
     const bool forceCheck = SDL_getenv("GENERALS_FORCE_UPDATE_CHECK") != nullptr;
+#endif
     
     fprintf(stderr, "[UpdateChecker] start() called. GitTag='%s', GitCommitTimeStamp=%lld, GitUncommittedChanges=%d, forceCheck=%d\n", GitTag, (long long)GitCommitTimeStamp, (int)GitUncommittedChanges, (int)forceCheck);
     fflush(stderr);

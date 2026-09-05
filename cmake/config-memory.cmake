@@ -20,6 +20,11 @@ option(RTS_MEMORYPOOL_DEBUG_INTENSE_VERIFY "Enables intensive verifications afte
 option(RTS_MEMORYPOOL_DEBUG_CHECK_BLOCK_OWNERSHIP "Enables debug to verify that a block actually belongs to the pool it is called with. This is great for debugging, but can be realllly slow, so is OFF by default." OFF)
 option(RTS_MEMORYPOOL_DEBUG_INTENSE_DMA_BOOKKEEPING "Prints statistics for memory usage of Memory Pools." OFF)
 
+# GeneralsX @build Codex 11/08/2026 Universal modules use the launcher's process-wide allocator for ordinary new/delete.
+if(RTS_BUILD_UNIVERSAL_LAUNCHER AND RTS_BUILD_OPTION_DEBUG)
+    set(RTS_MEMORYPOOL_DEBUG_CUSTOM_NEW OFF CACHE BOOL "Use the launcher allocator in universal debug builds" FORCE)
+endif()
+
 # Memory dump options
 option(RTS_CRASHDUMP_ENABLE "Enables writing crash dumps on unhandled exceptions or release crash failures." ON)
 

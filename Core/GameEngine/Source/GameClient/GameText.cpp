@@ -856,7 +856,46 @@ void GameTextManager::translateCopy( WideChar *outbuf, Char *inbuf )
 		}
 		else if( *inbuf != '\\' )
 		{
-			*outbuf++ = *inbuf & 0x00FF;
+			// GeneralsArsenal @feature Codex 15/08/2026 Decode UTF-8 STR files while retaining byte-compatible legacy text.
+			const unsigned char lead = static_cast<unsigned char>(*inbuf);
+			uint32_t codePoint = lead;
+			Int continuationCount = 0;
+			if ((lead & 0xE0) == 0xC0) {
+				codePoint = lead & 0x1F;
+				continuationCount = 1;
+			} else if ((lead & 0xF0) == 0xE0) {
+				codePoint = lead & 0x0F;
+				continuationCount = 2;
+			} else if ((lead & 0xF8) == 0xF0) {
+				codePoint = lead & 0x07;
+				continuationCount = 3;
+			}
+			Bool validUtf8 = continuationCount > 0;
+			for (Int index = 1; validUtf8 && index <= continuationCount; ++index) {
+				const unsigned char continuation = static_cast<unsigned char>(inbuf[index]);
+				if ((continuation & 0xC0) != 0x80) validUtf8 = FALSE;
+				else codePoint = (codePoint << 6) | (continuation & 0x3F);
+			}
+			if (validUtf8 && ((continuationCount == 1 && codePoint < 0x80) ||
+				(continuationCount == 2 && codePoint < 0x800) ||
+				(continuationCount == 3 && codePoint < 0x10000) ||
+				codePoint > 0x10FFFF || (codePoint >= 0xD800 && codePoint <= 0xDFFF))) {
+				validUtf8 = FALSE;
+			}
+			if (validUtf8) {
+				if (codePoint <= 0xFFFF) {
+					*outbuf++ = static_cast<WideChar>(codePoint);
+				} else if (sizeof(WideChar) == 2) {
+					codePoint -= 0x10000;
+					*outbuf++ = static_cast<WideChar>(0xD800 + (codePoint >> 10));
+					*outbuf++ = static_cast<WideChar>(0xDC00 + (codePoint & 0x3FF));
+				} else {
+					*outbuf++ = static_cast<WideChar>(codePoint);
+				}
+				inbuf += continuationCount;
+			} else {
+				*outbuf++ = static_cast<WideChar>(lead);
+			}
 		}
 		else
 			slash = TRUE;

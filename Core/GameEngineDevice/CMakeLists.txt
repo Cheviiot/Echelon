@@ -206,6 +206,8 @@ endif()
 # Add C++ 17 FileSystem implementation for non-VS6 builds
 if(NOT IS_VS6_BUILD)
     list(APPEND GAMEENGINEDEVICE_SRC
+        Include/GeneralsArsenalLauncher/ContentLayerRuntime.h
+        Source/GeneralsArsenalLauncher/ContentLayerRuntime.cpp
         Include/StdDevice/Common/StdBIGFile.h
         Include/StdDevice/Common/StdBIGFileSystem.h
         Include/StdDevice/Common/StdLocalFile.h

@@ -151,7 +151,8 @@ void SubsystemInterfaceList::removeSubsystem(SubsystemInterface* sys)
 #endif
 }
 //-----------------------------------------------------------------------------
-void SubsystemInterfaceList::initSubsystem(SubsystemInterface* sys, const char* path1, const char* path2, Xfer *pXfer, AsciiString name)
+void SubsystemInterfaceList::initSubsystem(SubsystemInterface* sys, const char* path1, const char* path2, Xfer *pXfer, AsciiString name,
+	void *singletonStorage, SingletonClearFunction clearSingleton)
 {
 	// GeneralsX @bugfix BenderAI 14/02/2026 Handle nullptr subsystems (e.g., CDManager on Linux)
 	// CreateCDManager() and other platform-specific factories may return nullptr
@@ -190,6 +191,7 @@ void SubsystemInterfaceList::initSubsystem(SubsystemInterface* sys, const char* 
 	}
 
 	m_subsystems.push_back(sys);
+	m_registrations.push_back(SubsystemRegistration{sys, singletonStorage, clearSingleton});
 	fprintf(stderr, "[SUBSYS] initSubsystem('%s') END\n", name.str());
 	fflush(stderr);
 }
@@ -217,12 +219,20 @@ void SubsystemInterfaceList::resetAll()
 void SubsystemInterfaceList::shutdownAll()
 {
 	// must go in reverse order!
-	for (SubsystemList::reverse_iterator it = m_subsystems.rbegin(); it != m_subsystems.rend(); ++it)
+	for (size_t index = m_subsystems.size(); index > 0; --index)
 	{
-		SubsystemInterface* sys = *it;
+		SubsystemInterface* sys = m_subsystems[index - 1];
 		delete sys;
+		// GeneralsArsenal @bugfix Codex 13/08/2026 Never leave a deleted subsystem reachable through its singleton.
+		if (index <= m_registrations.size()) {
+			const SubsystemRegistration &registration = m_registrations[index - 1];
+			if (registration.subsystem == sys && registration.clearSingleton && registration.singletonStorage) {
+				registration.clearSingleton(registration.singletonStorage);
+			}
+		}
 	}
 	m_subsystems.clear();
+	m_registrations.clear();
 }
 
 #ifdef DUMP_PERF_STATS

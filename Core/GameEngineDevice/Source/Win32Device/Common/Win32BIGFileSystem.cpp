@@ -34,6 +34,7 @@
 #include "Common/GameMemory.h"
 #include "Common/LocalFileSystem.h"
 #include "Common/Registry.h"
+#include "GeneralsArsenalLauncher/ArchiveLoadPolicy.h"
 
 #include "Win32Device/Common/Win32BIGFile.h"
 #include "Win32Device/Common/Win32BIGFileSystem.h"
@@ -340,7 +341,7 @@ static Bool loadPrimaryGameAssets(TBigFileSystem* fileSystem, AsciiString* loade
 	}
 
 	// Backward compatibility with previous env naming.
-	const char* compatibilityEnvValue = getenv("GENERALSX_ASSET_PATH");
+	const char* compatibilityEnvValue = getenv("GENERALS_ARSENAL_ASSET_PATH");
 	AsciiString sanitizedCompatibilityEnvPath;
 	if (sanitizeConfiguredPath(compatibilityEnvValue, sanitizedCompatibilityEnvPath)) {
 		if (tryLoadBigFiles(fileSystem, sanitizedCompatibilityEnvPath, "env-compat")) {
@@ -435,7 +436,7 @@ static void loadBaseGeneralsAssetsForZH(TBigFileSystem* fileSystem, const AsciiS
 		}
 	}
 
-	const char* compatibilityBaseEnvValue = getenv("GENERALSX_GENERALS_ASSET_PATH");
+	const char* compatibilityBaseEnvValue = getenv("GENERALS_ARSENAL_GENERALS_ASSET_PATH");
 	if (compatibilityBaseEnvValue != nullptr && compatibilityBaseEnvValue[0] != '\0') {
 		if (tryLoadBigFiles(fileSystem, AsciiString(compatibilityBaseEnvValue), "env-generals-compat")) {
 			return;
@@ -650,6 +651,13 @@ Bool Win32BIGFileSystem::loadBigFilesFromDirectory(AsciiString dir, AsciiString 
 	Bool actuallyAdded = FALSE;
 	FilenameListIter it = filenameList.begin();
 	while (it != filenameList.end()) {
+		// GeneralsArsenal @feature Codex 13/08/2026 Keep optional archive filtering identical in both VFS backends.
+		if (GeneralsArsenalArchivePolicy::IsArchiveDisabled((*it).str())) {
+			fprintf(stderr, "INFO: Generals: Arsenal skipped BIG archive by launch policy: %s\n", (*it).str());
+			fflush(stderr);
+			it++;
+			continue;
+		}
 #if RTS_ZEROHOUR
 		// TheSuperHackers @bugfix bobtista 18/11/2025 Skip duplicate INIZH.big in Data\INI to prevent CRC mismatches.
 		// English, Chinese, and Korean SKUs shipped with two INIZH.big files (one in Run directory, one in Run\Data\INI).

@@ -296,6 +296,14 @@ public:
 
 	static bool Is_Device_Lost() { return IsDeviceLost; }
 	static bool Is_Initted() { return IsInitted; }
+	// GeneralsArsenal @bugfix Codex 13/08/2026 Expose the final COM count so launcher quiescence cannot mistake a detached pointer for a destroyed DXVK device.
+	static unsigned long Get_Last_Device_Release_Count() { return LastDeviceReleaseCount; }
+	// GeneralsArsenal @feature Codex 14/08/2026 Separate the engine render resolution from a launcher-owned SDL window geometry.
+	static void Set_Window_Geometry_Externally_Owned(bool externallyOwned) { IsWindowGeometryExternallyOwned = externallyOwned; }
+	static bool Is_Window_Geometry_Externally_Owned() { return IsWindowGeometryExternallyOwned; }
+	typedef bool (*WindowModeRequestFunc)(void *userData, bool windowed, int renderWidth, int renderHeight);
+	static void Set_Window_Mode_Request_Callback(WindowModeRequestFunc callback, void *userData);
+	static bool Request_Externally_Owned_Window_Mode(bool windowed, int renderWidth, int renderHeight);
 
 	static bool Has_Stencil ();
 	static void Get_Format_Name(unsigned int format, StringClass *tex_format);
@@ -679,6 +687,9 @@ protected:
 	static int								BitDepth;
 	static int								TextureBitDepth;
 	static bool								IsWindowed;
+	static bool								IsWindowGeometryExternallyOwned;
+	static WindowModeRequestFunc			WindowModeRequestCallback;
+	static void *							WindowModeRequestUserData;
 	static D3DFORMAT					DisplayFormat;
 	static D3DMULTISAMPLE_TYPE	MultiSampleAntiAliasing;
 
@@ -724,6 +735,7 @@ protected:
 
 	static IDirect3D8 *					D3DInterface;			//d3d8;
 	static IDirect3DDevice8 *			D3DDevice;				//d3ddevice8;
+	static unsigned long				LastDeviceReleaseCount;
 
 	static IDirect3DSurface8 *			CurrentRenderTarget;
 	static IDirect3DSurface8 *			CurrentDepthBuffer;

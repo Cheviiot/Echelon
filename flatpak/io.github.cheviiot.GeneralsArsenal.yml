@@ -1,8 +1,8 @@
-app-id: com.fbraz3.GeneralsXZH
+app-id: io.github.cheviiot.GeneralsArsenal
 runtime: org.freedesktop.Platform
 runtime-version: "25.08"
 sdk: org.freedesktop.Sdk
-command: generalsxzh-wrapper.sh
+command: generals-arsenal-wrapper.sh
 
 finish-args:
   - --share=ipc
@@ -11,8 +11,7 @@ finish-args:
   - --socket=fallback-x11
   - --socket=pulseaudio
   - --device=dri
-  - --filesystem=~/GeneralsX:create
-  - --filesystem=xdg-data/GeneralsX:create
+  - --filesystem=~/.GeneralsArsenal:create
 
 modules:
   - name: glm
@@ -35,7 +34,7 @@ modules:
         url: https://github.com/g-truc/gli.git
         branch: master
 
-  - name: generalsxzh
+  - name: generals-arsenal
     buildsystem: simple
     build-commands:
       - |
@@ -43,9 +42,12 @@ modules:
           -DCMAKE_BUILD_TYPE=RelWithDebInfo \
           -DCMAKE_INSTALL_PREFIX=/app \
           -DRTS_BUILD_ZEROHOUR=ON \
-          -DRTS_BUILD_GENERALS=OFF \
+          -DRTS_BUILD_GENERALS=ON \
+          -DRTS_BUILD_UNIVERSAL_LAUNCHER=ON \
           -DRTS_BUILD_CORE_TOOLS=OFF \
           -DRTS_BUILD_CORE_EXTRAS=OFF \
+          -DRTS_BUILD_GENERALS_TOOLS=OFF \
+          -DRTS_BUILD_GENERALS_EXTRAS=OFF \
           -DRTS_BUILD_ZEROHOUR_TOOLS=OFF \
           -DRTS_BUILD_ZEROHOUR_EXTRAS=OFF \
           -DRTS_BUILD_OPTION_DEBUG=OFF \
@@ -60,31 +62,41 @@ modules:
           -DRTS_BUILD_OPTION_SAGE_PATCH=ON \
           -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
           -DFETCHCONTENT_UPDATES_DISCONNECTED=ON \
-          -DFETCHCONTENT_SOURCE_DIR_DXVK=/run/build/generalsxzh/dxvk-src \
-          -DFETCHCONTENT_SOURCE_DIR_SDL3=/run/build/generalsxzh/sdl3-src \
-          -DFETCHCONTENT_SOURCE_DIR_SDL3_IMAGE=/run/build/generalsxzh/sdl3-image-src \
-          -DFETCHCONTENT_SOURCE_DIR_OPENAL_SOFT=/run/build/generalsxzh/openal-soft-src \
-          -DFETCHCONTENT_SOURCE_DIR_GAMESPY=/run/build/generalsxzh/gamespy-src \
-          -DFETCHCONTENT_SOURCE_DIR_LZHL=/run/build/generalsxzh/lzhl-src/CompLibHeader \
-          -DFETCHCONTENT_SOURCE_DIR_GAMEMATH=/run/build/generalsxzh/gamemath-src \
-          -DFETCHCONTENT_SOURCE_DIR_STB=/run/build/generalsxzh/stb-src
-      - cmake --build build-flatpak --target z_generals -j "${FLATPAK_BUILDER_N_JOBS:-4}"
+          -DFETCHCONTENT_SOURCE_DIR_DXVK=/run/build/generals-arsenal/dxvk-src \
+          -DFETCHCONTENT_SOURCE_DIR_SDL3=/run/build/generals-arsenal/sdl3-src \
+          -DFETCHCONTENT_SOURCE_DIR_SDL3_IMAGE=/run/build/generals-arsenal/sdl3-image-src \
+          -DFETCHCONTENT_SOURCE_DIR_OPENAL_SOFT=/run/build/generals-arsenal/openal-soft-src \
+          -DFETCHCONTENT_SOURCE_DIR_GAMESPY=/run/build/generals-arsenal/gamespy-src \
+          -DFETCHCONTENT_SOURCE_DIR_LZHL=/run/build/generals-arsenal/lzhl-src/CompLibHeader \
+          -DFETCHCONTENT_SOURCE_DIR_GAMEMATH=/run/build/generals-arsenal/gamemath-src \
+          -DFETCHCONTENT_SOURCE_DIR_STB=/run/build/generals-arsenal/stb-src \
+          -DFETCHCONTENT_SOURCE_DIR_YAML_CPP=/run/build/generals-arsenal/yaml-cpp-src \
+          -DFETCHCONTENT_SOURCE_DIR_LIBARCHIVE=/run/build/generals-arsenal/libarchive-src
+      - cmake --build build-flatpak --target generals_arsenal_launcher -j "${FLATPAK_BUILDER_N_JOBS:-4}"
+      - cmake --build build-flatpak --target generals_arsenal_settings_tests -j "${FLATPAK_BUILDER_N_JOBS:-4}"
+      - build-flatpak/Core/GameEngineDevice/Source/GeneralsArsenalLauncher/generals_arsenal_settings_tests
       - cmake --build build-flatpak --target sage_patch -j "${FLATPAK_BUILDER_N_JOBS:-4}" || true
-      - install -Dm755 build-flatpak/GeneralsMD/GeneralsXZH /app/bin/GeneralsXZH
-      - install -Dm755 flatpak/run-flatpak.sh /app/bin/generalsxzh-wrapper.sh
-      - install -Dm644 flatpak/com.fbraz3.GeneralsXZH.desktop /app/share/applications/com.fbraz3.GeneralsXZH.desktop
-      - install -Dm644 flatpak/com.fbraz3.GeneralsXZH.metainfo.xml /app/share/metainfo/com.fbraz3.GeneralsXZH.metainfo.xml
-      - install -Dm644 flatpak/generalsx-zh_icon_512.png /app/share/icons/hicolor/512x512/apps/com.fbraz3.GeneralsXZH.png
-      - install -Dm644 resources/dxvk/dxvk.conf /app/share/generalsxzh/dxvk.conf
+      - install -Dm755 build-flatpak/GeneralsArsenal/GeneralsArsenal /app/bin/GeneralsArsenal
+      - install -Dm755 build-flatpak/GeneralsArsenal/libGeneralsArsenalGeneralsEngine.so /app/lib/generals-arsenal/libGeneralsArsenalGeneralsEngine.so
+      - install -Dm755 build-flatpak/GeneralsArsenal/libGeneralsArsenalZeroHourEngine.so /app/lib/generals-arsenal/libGeneralsArsenalZeroHourEngine.so
+      - install -Dm755 flatpak/run-flatpak-generals-arsenal.sh /app/bin/generals-arsenal-wrapper.sh
+      - install -Dm644 flatpak/io.github.cheviiot.GeneralsArsenal.desktop /app/share/applications/io.github.cheviiot.GeneralsArsenal.desktop
+      - install -Dm644 flatpak/io.github.cheviiot.GeneralsArsenal.metainfo.xml /app/share/metainfo/io.github.cheviiot.GeneralsArsenal.metainfo.xml
+      - install -Dm644 flatpak/io.github.cheviiot.GeneralsArsenal.png /app/share/icons/hicolor/512x512/apps/io.github.cheviiot.GeneralsArsenal.png
+      - install -Dm644 assets/launcher/generals-arsenal-launcher-background.png /app/share/generals-arsenal/generals-arsenal-launcher-background.png
+      - install -Dm644 assets/launcher/generals-arsenal-logo.png /app/share/generals-arsenal/generals-arsenal-logo.png
+      - install -Dm644 /usr/share/fonts/dejavu/DejaVuSans.ttf /app/share/generals-arsenal/DejaVuSans.ttf
+      - install -Dm644 /usr/share/licenses/freedesktop-sdk/dejavu-fonts/LICENSE /app/share/licenses/generals-arsenal/DejaVuSans-LICENSE
+      - install -Dm644 yaml-cpp-src/LICENSE /app/share/licenses/generals-arsenal/yaml-cpp-LICENSE
+      - install -Dm644 libarchive-src/COPYING /app/share/licenses/generals-arsenal/libarchive-COPYING
+      - install -Dm644 resources/dxvk/dxvk.conf /app/share/generals-arsenal/dxvk.conf
       - install -d /app/lib
-      - cp -a /run/build/generalsxzh/dxvk-src/lib/libdxvk_d3d8.so* /app/lib/
-      - cp -a /run/build/generalsxzh/dxvk-src/lib/libdxvk_d3d9.so* /app/lib/
+      - cp -a /run/build/generals-arsenal/dxvk-src/lib/libdxvk_d3d8.so* /app/lib/
+      - cp -a /run/build/generals-arsenal/dxvk-src/lib/libdxvk_d3d9.so* /app/lib/
       - if [ -d build-flatpak/_deps/sdl3-build ]; then cp -a build-flatpak/_deps/sdl3-build/libSDL3.so* /app/lib/; fi
       - if [ -d build-flatpak/_deps/sdl3_image-build ]; then cp -a build-flatpak/_deps/sdl3_image-build/libSDL3_image.so* /app/lib/; fi
       - if [ -d build-flatpak/_deps/openal_soft-build ]; then cp -a build-flatpak/_deps/openal_soft-build/libopenal.so* /app/lib/; fi
       - find build-flatpak -name "libgamespy.so*" -type f -exec cp -a {} /app/lib/ \;
-      # SagePatch (optional QoL, gated by RTS_BUILD_OPTION_SAGE_PATCH at build).
-      # Only present when the option is ON; -f guard keeps the manifest robust.
       - if [ -f build-flatpak/Patches/SagePatch/libsage_patch.so ]; then cp -a build-flatpak/Patches/SagePatch/libsage_patch.so /app/lib/; fi
       - |
         for f in /app/lib/lib*.so.*; do
@@ -108,22 +120,16 @@ modules:
 
         export DXVK_WSI_DRIVER="SDL3"
         export DXVK_LOG_LEVEL="${DXVK_LOG_LEVEL:-info}"
-
-        # SagePatch (optional QoL: F11 screenshot, Scroll Lock cursor lock,
-        # Ctrl+PgUp/Dn brightness, Ctrl+1..5 window snap). Loaded via LD_PRELOAD
-        # only if the .so is present in /app/lib.
-        if [[ -f /app/lib/libsage_patch.so && "${SAGE_PATCH_DISABLED:-0}" != "1" ]]; then
-          if [[ -n "${LD_PRELOAD:-}" ]]; then
-            export LD_PRELOAD="/app/lib/libsage_patch.so:${LD_PRELOAD}"
-          else
-            export LD_PRELOAD="/app/lib/libsage_patch.so"
-          fi
-        fi
-        
-        # DXVK HUD is disabled by default because Generals has a native FPS counter.
         export DXVK_HUD="${DXVK_HUD:-0}"
 
-        # Keep Vulkan ICD selection to the runtime/driver defaults unless user explicitly overrides.
+        sage_patch_preload="${LD_PRELOAD:-}"
+        if [[ -f /app/lib/libsage_patch.so && "${SAGE_PATCH_DISABLED:-0}" != "1" ]]; then
+          if [[ -n "${LD_PRELOAD:-}" ]]; then
+            sage_patch_preload="/app/lib/libsage_patch.so:${LD_PRELOAD}"
+          else
+            sage_patch_preload="/app/lib/libsage_patch.so"
+          fi
+        fi
 
         if [[ -z "${ALSOFT_DISABLE_CPU_EXTS:-}" ]]; then
           export ALSOFT_DISABLE_CPU_EXTS="all"
@@ -132,35 +138,7 @@ modules:
           export ALSOFT_DRIVERS="pulse,alsa,oss,jack,null,wave"
         fi
 
-        # GeneralsX @bugfix felipebraz 12/07/2026 Default CNC_GENERALS_PATH to ~/GeneralsX/Generals if empty (Issue #205)
-        if [[ -z "${CNC_GENERALS_PATH:-}" ]]; then
-          export CNC_GENERALS_PATH="${HOME}/GeneralsX/Generals"
-        fi
-
-        if [[ -z "${CNC_GENERALS_INSTALLPATH:-}" ]]; then
-          for candidate in \
-            "${HOME}/GeneralsX/GeneralsZH" \
-            "${HOME}/GeneralsX/GeneralsMD" \
-            "${HOME}/.local/share/GeneralsX/GeneralsZH" \
-            "${HOME}/.local/share/GeneralsX/GeneralsMD"; do
-            if [[ -d "${candidate}" ]]; then
-              export CNC_GENERALS_INSTALLPATH="${candidate}/"
-              break
-            fi
-          done
-        fi
-
-        if [[ -z "${CNC_GENERALS_INSTALLPATH:-}" ]]; then
-          echo "ERROR: Could not find game data directory inside Flatpak sandbox." >&2
-          exit 1
-        fi
-
-        cd "${CNC_GENERALS_INSTALLPATH}"
-
-        # SagePatch INI override: the engine now auto-creates SagePatch.ini with
-        # defaults in the user data directory on first run.
-
-        /app/bin/GeneralsXZH "$@" 2>&1 | grep --line-buffered -v "Unimplemented render state D3DRS_PATCHSEGMENTS" | grep --line-buffered -v "No accelerated colorspace conversion"
+        LD_PRELOAD="${sage_patch_preload}" /app/bin/GeneralsArsenal "$@" 2>&1 | grep --line-buffered -v "Unimplemented render state D3DRS_PATCHSEGMENTS" | grep --line-buffered -v "No accelerated colorspace conversion"
         exit ${PIPESTATUS[0]}
         EOF
       - chmod +x /app/bin/run.sh
@@ -203,3 +181,11 @@ modules:
         url: https://github.com/TheSuperHackers/stb.git
         commit: 5c205738c191bcb0abc65c4febfa9bd25ff35234
         dest: stb-src
+      - type: git
+        url: https://github.com/jbeder/yaml-cpp.git
+        commit: 56e3bb550c91fd7005566f19c079cb7a503223cf
+        dest: yaml-cpp-src
+      - type: git
+        url: https://github.com/libarchive/libarchive.git
+        commit: 27cbc7827172698143e440801fc0ba39ccb4f1f5
+        dest: libarchive-src

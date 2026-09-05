@@ -317,6 +317,18 @@ static void Resolve_Present_BackBuffer_Size(int gameW, int gameH, bool isWindowe
 	outW = (UINT)gameW;
 	outH = (UINT)gameH;
 
+	// GeneralsArsenal @bugfix Codex 14/08/2026 A hosted engine renders into the existing window instead of asking DXVK for a game-sized presentation surface.
+	if (DX8Wrapper::Is_Window_Geometry_Externally_Owned()) {
+		int windowW = gameW;
+		int windowH = gameH;
+		float density = 1.0f;
+		if (DX8Wrapper::GetWindowSize(windowW, windowH, density)) {
+			outW = (UINT)windowW;
+			outH = (UINT)windowH;
+		}
+		return;
+	}
+
 #ifndef _WIN32
 	if (!isWindowed) {
 		int windowW = gameW;
@@ -365,8 +377,24 @@ int								DX8Wrapper::ResolutionHeight							= DEFAULT_RESOLUTION_HEIGHT;
 int								DX8Wrapper::BitDepth										= DEFAULT_BIT_DEPTH;
 int								DX8Wrapper::TextureBitDepth							= DEFAULT_TEXTURE_BIT_DEPTH;
 bool								DX8Wrapper::IsWindowed									= false;
+bool								DX8Wrapper::IsWindowGeometryExternallyOwned			= false;
+DX8Wrapper::WindowModeRequestFunc DX8Wrapper::WindowModeRequestCallback			= nullptr;
+void *								DX8Wrapper::WindowModeRequestUserData				= nullptr;
 D3DFORMAT					DX8Wrapper::DisplayFormat	= D3DFMT_UNKNOWN;
 D3DMULTISAMPLE_TYPE DX8Wrapper::MultiSampleAntiAliasing	= DEFAULT_MSAA;
+
+// GeneralsArsenal @feature Codex 14/08/2026 Route hosted window-mode changes through the launcher-owned SDL transition coordinator.
+void DX8Wrapper::Set_Window_Mode_Request_Callback(WindowModeRequestFunc callback, void *userData)
+{
+	WindowModeRequestCallback = callback;
+	WindowModeRequestUserData = userData;
+}
+
+bool DX8Wrapper::Request_Externally_Owned_Window_Mode(bool windowed, int renderWidth, int renderHeight)
+{
+	return WindowModeRequestCallback &&
+		WindowModeRequestCallback(WindowModeRequestUserData, windowed, renderWidth, renderHeight);
+}
 
 // shader system additions KJM v
 DWORD								DX8Wrapper::Vertex_Shader								= 0;
@@ -395,6 +423,7 @@ D3DCOLOR							DX8Wrapper::FogColor										= 0;
 
 IDirect3D8 *					DX8Wrapper::D3DInterface								= nullptr;
 IDirect3DDevice8 *			DX8Wrapper::D3DDevice									= nullptr;
+unsigned long				DX8Wrapper::LastDeviceReleaseCount					= 0;
 IDirect3DSurface8 *			DX8Wrapper::CurrentRenderTarget						= nullptr;
 IDirect3DSurface8 *			DX8Wrapper::CurrentDepthBuffer						= nullptr;
 IDirect3DSurface8 *			DX8Wrapper::DefaultRenderTarget						= nullptr;
@@ -572,6 +601,7 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 
 	D3DInterface = nullptr;
 	D3DDevice = nullptr;
+	LastDeviceReleaseCount = 0;
 
 	WWDEBUG_SAY(("Reset DX8Wrapper statistics"));
 	Reset_Statistics();
@@ -655,19 +685,6 @@ void DX8Wrapper::Shutdown()
 		D3DInterface->Release();
 		D3DInterface=nullptr;
 
-	}
-
-	if (CurrentCaps)
-	{
-		int max=CurrentCaps->Get_Max_Textures_Per_Pass();
-		for (int i = 0; i < max; i++)
-		{
-			if (Textures[i])
-			{
-				Textures[i]->Release();
-				Textures[i] = nullptr;
-			}
-		}
 	}
 
 	if (D3D8Lib) {
@@ -991,6 +1008,10 @@ void DX8Wrapper::Release_Device()
 		DX8CALL(SetStreamSource(0, nullptr, 0));	//release reference count on last rendered vertex buffer
 		DX8CALL(SetIndices(nullptr,0));	//release reference count on last rendered index buffer
 
+		// GeneralsArsenal @bugfix Codex 13/08/2026 Release wrapper-owned COM texture and render-state references before releasing the DXVK device.
+		// Shutdown used to delete CurrentCaps first, making the later texture cleanup unreachable and leaving the D3D8 device and Wayland sync surface alive.
+		Invalidate_Cached_Render_States();
+
 
 		/*
 		** Release the current vertex and index buffers
@@ -1012,7 +1033,11 @@ void DX8Wrapper::Release_Device()
 		** Release the device
 		*/
 
-		D3DDevice->Release();
+		// GeneralsArsenal @bugfix Codex 13/08/2026 Preserve the COM result; a nonzero value means DXVK and its Wayland surface are still alive.
+		LastDeviceReleaseCount = D3DDevice->Release();
+		fprintf(stderr, "INFO: DX8Wrapper::Release_Device() remaining D3D8 device references: %lu\n",
+			LastDeviceReleaseCount);
+		fflush(stderr);
 		D3DDevice=nullptr;
 	}
 }
@@ -1197,6 +1222,11 @@ void DX8Wrapper::Get_Format_Name(unsigned int format, StringClass *tex_format)
 
 void DX8Wrapper::Resize_And_Position_Window()
 {
+	// GeneralsArsenal @bugfix Codex 14/08/2026 The launcher owns the shared SDL window; game resolution changes must stay inside the render pipeline.
+	if (IsWindowGeometryExternallyOwned) {
+		return;
+	}
+
 	// Get the current dimensions of the 'render area' of the window
 	RECT rect = { 0 };
 	::GetClientRect (_Hwnd, &rect);

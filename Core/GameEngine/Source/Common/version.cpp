@@ -32,6 +32,9 @@
 #include "Common/version.h"
 
 #include "gitinfo.h"
+#ifdef GENERALS_ARSENAL_BRAND
+#include "GeneralsArsenalLauncher/BrandIdentity.h"
+#endif
 #include <ctype.h>
 #include <stdio.h>
 
@@ -322,8 +325,12 @@ UnicodeString Version::getUnicodeBuildUserOrGitCommitAuthorName() const
 
 UnicodeString Version::getUnicodeProductTitle() const
 {
-	// @todo Make configurable
+	// GeneralsArsenal @feature Codex 13/08/2026 Retain the upstream version formatter with the fork brand supplied centrally.
+#ifdef GENERALS_ARSENAL_BRAND
+	return GeneralsArsenalBrand::kProductNameWide;
+#else
 	return L"GeneralsX";
+#endif
 }
 
 UnicodeString Version::getUnicodeProductVersion() const
@@ -462,10 +469,19 @@ UnicodeString Version::getUnicodeProjectWatermark() const
 	if (GitTag && GitTag[0] != '\0')
 	{
 		const char* tagBase = GitTag;
+#ifdef GENERALS_ARSENAL_BRAND
+		const size_t tagPrefixLength = strlen(GeneralsArsenalBrand::kReleaseTagPrefix);
+		if (strncmp(tagBase, GeneralsArsenalBrand::kReleaseTagPrefix, tagPrefixLength) == 0 ||
+			strncmp(tagBase, GeneralsArsenalBrand::kReleaseTagPrefixLower, tagPrefixLength) == 0)
+		{
+			tagBase += tagPrefixLength;
+		}
+#else
 		if (strncmp(tagBase, "generalsx-", 10) == 0 || strncmp(tagBase, "GeneralsX-", 10) == 0)
 		{
 			tagBase += 10;
 		}
+#endif
 
 		char formattedTag[128];
 		strncpy(formattedTag, tagBase, sizeof(formattedTag) - 1);
@@ -478,7 +494,12 @@ UnicodeString Version::getUnicodeProjectWatermark() const
 		snprintf(versionSuffix, sizeof(versionSuffix), " - %s", formattedTag);
 	}
 
+	// GeneralsArsenal @feature Codex 13/08/2026 Keep Beta-16 watermark behavior without exposing the upstream product identity.
+#ifdef GENERALS_ARSENAL_BRAND
+	snprintf(finalCredit, sizeof(finalCredit), "%s%s", GeneralsArsenalBrand::kProjectWatermark, versionSuffix);
+#else
 	snprintf(finalCredit, sizeof(finalCredit), "GeneralsX - Cross Platform C&C Generals%s", versionSuffix);
+#endif
 
 	UnicodeString watermark;
 	watermark.translate(finalCredit);
