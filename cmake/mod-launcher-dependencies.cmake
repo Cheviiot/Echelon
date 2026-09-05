@@ -1,0 +1,34 @@
+# Echelon @build Codex 14/08/2026 Pin the native mod manager's portable catalog and transport dependencies.
+find_package(CURL REQUIRED)
+find_package(OpenSSL REQUIRED)
+
+set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_INSTALL OFF CACHE BOOL "" FORCE)
+set(YAML_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(yaml_cpp
+    GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+    GIT_TAG 56e3bb550c91fd7005566f19c079cb7a503223cf
+    GIT_SHALLOW FALSE
+)
+FetchContent_MakeAvailable(yaml_cpp)
+
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(ENABLE_TEST OFF CACHE BOOL "" FORCE)
+set(ENABLE_TAR OFF CACHE BOOL "" FORCE)
+set(ENABLE_CPIO OFF CACHE BOOL "" FORCE)
+set(ENABLE_CAT OFF CACHE BOOL "" FORCE)
+set(ENABLE_UNZIP OFF CACHE BOOL "" FORCE)
+set(ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+set(ENABLE_LIBXML2 OFF CACHE BOOL "" FORCE)
+set(ENABLE_EXPAT OFF CACHE BOOL "" FORCE)
+set(ENABLE_PCREPOSIX OFF CACHE BOOL "" FORCE)
+set(ENABLE_PCRE2POSIX OFF CACHE BOOL "" FORCE)
+set(ENABLE_CLANG_TIDY OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(libarchive
+    GIT_REPOSITORY https://github.com/libarchive/libarchive.git
+    GIT_TAG 27cbc7827172698143e440801fc0ba39ccb4f1f5
+    GIT_SHALLOW FALSE
+)
+FetchContent_MakeAvailable(libarchive)

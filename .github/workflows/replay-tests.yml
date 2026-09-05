@@ -102,40 +102,12 @@ jobs:
         if: inputs.platform == 'macos'
         run: |
           mkdir -p /tmp/game-bundle
-          TAR_FILE=$(find /tmp/game-artifact -name "*.tar" | head -1)
-          echo "Extracting: $TAR_FILE"
-          tar -xf "$TAR_FILE" -C /tmp/game-bundle
-
-          # Resolve app layout directly to avoid path inference mistakes.
-          APP_DIR=$(find /tmp/game-bundle -type d -name "*.app" | head -1)
-          if [ -z "$APP_DIR" ]; then
-            echo "ERROR: .app bundle not found after extraction"
-            find /tmp/game-bundle -maxdepth 4 -print
-            exit 1
-          fi
-
-          APP_RESOURCES="$APP_DIR/Contents/Resources"
-          GAME_DIR="$APP_RESOURCES/bin"
-          GAME_BIN="$GAME_DIR/GeneralsXZH"
-
-          if [ ! -d "$APP_RESOURCES" ]; then
-            echo "ERROR: Resources dir not found: $APP_RESOURCES"
-            find "$APP_DIR" -maxdepth 4 -print
-            exit 1
-          fi
-
-          if [ ! -f "$GAME_BIN" ]; then
-            echo "ERROR: Game binary not found at expected path: $GAME_BIN"
-            find "$APP_RESOURCES" -maxdepth 4 -type f -name "GeneralsXZH" -print
-            exit 1
-          fi
-
-          echo "GAME_BIN=$GAME_BIN" >> $GITHUB_ENV
-          echo "GAME_DIR=$GAME_DIR" >> $GITHUB_ENV
-          echo "APP_RESOURCES=$APP_RESOURCES" >> $GITHUB_ENV
-
-          echo "Game bundle contents (Resources):"
-          ls -la "$APP_RESOURCES/"
+          unzip -q /tmp/game-artifact/Echelon-macos-arm64.zip -d /tmp/game-bundle
+          APP_DIR="/tmp/game-bundle/Echelon.app"
+          test -x "$APP_DIR/Contents/MacOS/Echelon"
+          echo "GAME_BIN=$APP_DIR/Contents/MacOS/run.sh" >> "$GITHUB_ENV"
+          echo "GAME_DIR=$HOME/.Echelon/GeneralsZH" >> "$GITHUB_ENV"
+          echo "APP_RESOURCES=$APP_DIR/Contents/Resources" >> "$GITHUB_ENV"
 
       - name: Install game bundle (Linux Flatpak)
         if: inputs.platform == 'linux-flatpak'
@@ -149,7 +121,7 @@ jobs:
 
           echo "Installing Flatpak bundle: $FLATPAK_FILE"
           flatpak --user install -y "$FLATPAK_FILE"
-          flatpak --user info com.fbraz3.GeneralsXZH
+          flatpak --user info io.github.cheviiot.Echelon
 
       # -----------------------------------------------------------------------
       # 4. Check out and extract game assets (password-protected 7z, uses LFS)
@@ -159,7 +131,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /tmp/cached-assets
-          key: game-assets-cache-v2
+          key: game-assets-cache-v3-universal
 
       - name: Clone game assets repo (GitLab with GitHub fallback)
         if: steps.cache-assets.outputs.cache-hit != 'true'
@@ -208,24 +180,24 @@ jobs:
       - name: Extract game assets to cache (only on cache miss)
         if: steps.cache-assets.outputs.cache-hit != 'true'
         run: |
-          mkdir -p /tmp/cached-assets
-          7z x -p"${{ secrets.ASSETS_KEY }}" "$GITHUB_WORKSPACE/ci-assets-repo/generalszh.7z" -o"/tmp/cached-assets" -y
+          mkdir -p /tmp/cached-assets/Generals /tmp/cached-assets/GeneralsZH
+          7z x -p"${{ secrets.ASSETS_KEY }}" "$GITHUB_WORKSPACE/ci-assets-repo/generals.7z" -o"/tmp/cached-assets/Generals" -y
+          7z x -p"${{ secrets.ASSETS_KEY }}" "$GITHUB_WORKSPACE/ci-assets-repo/generalszh.7z" -o"/tmp/cached-assets/GeneralsZH" -y
 
       - name: Install game assets (Linux)
         if: inputs.platform == 'linux'
         run: |
           echo "Copying game assets from cache into: $GAME_DIR"
-          cp -r /tmp/cached-assets/. "$GAME_DIR/"
+          cp -r /tmp/cached-assets/GeneralsZH/. "$GAME_DIR/"
           echo "Big files found:"
           ls "$GAME_DIR/"*.big 2>/dev/null | head -10 || echo "(none found)"
 
       - name: Install game assets (macOS)
         if: inputs.platform == 'macos'
         run: |
-          echo "Copying game assets from cache into: $GAME_DIR"
-          cp -r /tmp/cached-assets/. "$GAME_DIR/"
-          echo "Big files found:"
-          ls "$GAME_DIR/"*.big 2>/dev/null | head -10 || echo "(none found)"
+          mkdir -p "$HOME/.Echelon/Generals" "$HOME/.Echelon/GeneralsZH"
+          cp -R /tmp/cached-assets/Generals/. "$HOME/.Echelon/Generals/"
+          cp -R /tmp/cached-assets/GeneralsZH/. "$HOME/.Echelon/GeneralsZH/"
 
       # -----------------------------------------------------------------------
       # 5. Check out replay repo and install maps + platform-specific replays
@@ -275,7 +247,7 @@ jobs:
       - name: Set up user data directories (Linux)
         if: inputs.platform == 'linux' || inputs.platform == 'linux-flatpak'
         run: |
-          USER_DATA="$HOME/.local/share/GeneralsX/GeneralsZH"
+          USER_DATA="$HOME/.Echelon/UserData/GeneralsZH"
           MAPS_DIR="$USER_DATA/Maps"
           REPLAYS_DIR="$USER_DATA/Replays"
           mkdir -p "$MAPS_DIR" "$REPLAYS_DIR"
@@ -302,15 +274,21 @@ jobs:
       - name: Install game assets (Linux Flatpak)
         if: inputs.platform == 'linux-flatpak'
         run: |
-          echo "Copying game assets from cache into: $USER_DATA"
-          cp -r /tmp/cached-assets/. "$USER_DATA/"
+          GENERALS_DATA="$HOME/.Echelon/Generals"
+          ZEROHOUR_DATA="$HOME/.Echelon/GeneralsZH"
+          mkdir -p "$GENERALS_DATA" "$ZEROHOUR_DATA"
+          echo "Copying Generals assets into: $GENERALS_DATA"
+          cp -r /tmp/cached-assets/Generals/. "$GENERALS_DATA/"
+          echo "Copying Zero Hour assets into: $ZEROHOUR_DATA"
+          cp -r /tmp/cached-assets/GeneralsZH/. "$ZEROHOUR_DATA/"
           echo "Big files found:"
-          ls "$USER_DATA/"*.big 2>/dev/null | head -10 || echo "(none found)"
+          ls "$GENERALS_DATA/"*.big "$ZEROHOUR_DATA/"*.big 2>/dev/null | head -10 || echo "(none found)"
+
 
       - name: Set up user data directories (macOS)
         if: inputs.platform == 'macos'
         run: |
-          USER_DATA="$HOME/Library/Application Support/GeneralsX/GeneralsZH"
+          USER_DATA="$HOME/.Echelon/UserData/GeneralsZH"
           MAPS_DIR="$USER_DATA/Maps"
           REPLAYS_DIR="$USER_DATA/Replays"
           mkdir -p "$MAPS_DIR" "$REPLAYS_DIR"
@@ -426,7 +404,7 @@ jobs:
             echo "=== $NAME ==="
 
             set +e
-            OUTPUT=$(timeout 180 flatpak run --env=SDL_VIDEODRIVER=dummy --env=SDL_AUDIODRIVER=dummy --env=DXVK_LOG_LEVEL=none com.fbraz3.GeneralsXZH -headless -replay "$rep" 2>&1)
+            OUTPUT=$(timeout 180 flatpak run --env=SDL_VIDEODRIVER=dummy --env=SDL_AUDIODRIVER=dummy --env=DXVK_LOG_LEVEL=none io.github.cheviiot.Echelon --profile=zerohour -headless -replay "$rep" 2>&1)
             CODE=$?
             set -e
 
@@ -468,8 +446,8 @@ jobs:
 
           cd "$GAME_DIR"
 
-          export DYLD_LIBRARY_PATH="$APP_RESOURCES/lib:${DYLD_LIBRARY_PATH:-}"
-          export DYLD_FALLBACK_LIBRARY_PATH="$APP_RESOURCES/lib:${DYLD_FALLBACK_LIBRARY_PATH:-}"
+          export DYLD_LIBRARY_PATH="$APP_RESOURCES/../MacOS:${DYLD_LIBRARY_PATH:-}"
+          export DYLD_FALLBACK_LIBRARY_PATH="$APP_RESOURCES/../MacOS:${DYLD_FALLBACK_LIBRARY_PATH:-}"
           export DXVK_WSI_DRIVER=SDL3
           export DXVK_LOG_LEVEL=none
           # Point the game to the extracted assets dir (bin/ alongside the binary)
@@ -495,7 +473,7 @@ jobs:
             echo "=== $NAME ==="
 
             set +e
-            OUTPUT=$($TIMEOUT_BIN 180 ./GeneralsXZH -headless -replay "$rep" 2>&1)
+            OUTPUT=$($TIMEOUT_BIN 180 "$GAME_BIN" --profile=zerohour -headless -replay "$rep" 2>&1)
             CODE=$?
             set -e
 

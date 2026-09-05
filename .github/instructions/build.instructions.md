@@ -1,5 +1,5 @@
 ---
-applyTo: 'cmake/**,CMakeLists.txt,CMakePresets.json'
+applyTo: 'cmake/**,CMakeLists.txt,CMakePresets.json,GeneralsX/**/CMakeLists.txt,GeneralsX/cmake/**'
 ---
 
 ## Build Presets
@@ -18,26 +18,24 @@ applyTo: 'cmake/**,CMakeLists.txt,CMakePresets.json'
 ## Build Workflow
 
 ```bash
-# Linux (Docker)
-./scripts/build/linux/docker-configure-linux.sh linux64-deploy
-./scripts/build/linux/docker-build-linux-zh.sh linux64-deploy
+# Run from the Echelon root, inside the documented Distrobox on ALT.
+cmake --preset linux64-deploy -DRTS_BUILD_UNIVERSAL_LAUNCHER=ON
+cmake --build build/linux64-deploy --target echelon_launcher echelon_settings_tests
+ctest --test-dir build/linux64-deploy -R echelon_local_content --output-on-failure
 
-# Linux (native)
-cmake --preset linux64-deploy
-cmake --build build/linux64-deploy --target z_generals
-
-# macOS
+# macOS product
 cmake --preset macos-vulkan
-cmake --build build/macos-vulkan --target z_generals
+cmake --build build/macos-vulkan --target echelon_launcher
+./scripts/build/macos/bundle-macos-echelon.sh macos-vulkan
 
-# Windows cross-build (exploratory)
-cmake --preset mingw-w64-i686
-cmake --build build/mingw-w64-i686 --target z_generals
+# Standalone engine validation: use a fresh build directory.
+cmake --preset linux64-deploy -B build/standalone -DRTS_BUILD_UNIVERSAL_LAUNCHER=OFF
+cmake --build build/standalone --target g_generals z_generals
 ```
 
 ## DXVK Source of Truth (macOS)
 
-- DXVK fixes must live in `references/fbraz3-dxvk` and be pushed to the fork branch `generalsx-macos-v2.6`.
+- DXVK fixes must live in `GeneralsX/references/fbraz3-dxvk` and be pushed to the fork branch `generalsx-macos-v2.6`.
 - macOS build tracks that branch via CMake FetchContent (`UPDATE_DISCONNECTED FALSE`).
 - Local mode: `-DSAGE_DXVK_USE_LOCAL_FORK=ON` (disables update/fetch).
 

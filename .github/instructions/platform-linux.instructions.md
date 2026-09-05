@@ -1,47 +1,31 @@
 ---
-applyTo: 'scripts/build/linux/**,scripts/env/docker/**,GeneralsMD/Code/CompatLib/**'
+applyTo: 'scripts/build/linux/**,GeneralsX/scripts/build/linux/**,GeneralsX/scripts/env/docker/**,GeneralsX/GeneralsMD/Code/CompatLib/**'
 ---
 
 ## Linux Build Environment
 
-**Native**:
-```bash
-sudo apt install build-essential cmake ninja-build git
-cmake --preset linux64-deploy
-cmake --build build/linux64-deploy --target z_generals
-```
+On ALT, use `ubuntu-dev` Distrobox for development packages and commands. The tested setup is recorded in `docs/WORKDIR/reports/ECHELON_FOUNDATION.md`. Do not install the project toolchain on the host.
 
-**Docker (from any host)**:
+From the repository root inside that environment:
+
 ```bash
-./scripts/build/linux/docker-configure-linux.sh linux64-deploy
-./scripts/build/linux/docker-build-linux-zh.sh linux64-deploy
+cmake --preset linux64-deploy -DRTS_BUILD_UNIVERSAL_LAUNCHER=ON
+cmake --build build/linux64-deploy --target echelon_launcher echelon_settings_tests
+ctest --test-dir build/linux64-deploy -R echelon_local_content --output-on-failure
+./scripts/build/linux/build-linux-flatpak.sh linux64-deploy Echelon
 ```
 
 ## Run & Test
 
-```bash
-./scripts/build/linux/deploy-linux-zh.sh
-./scripts/build/linux/run-linux-zh.sh -win
-./scripts/qa/smoke/docker-smoke-test-zh.sh linux64-deploy
-
-# GDB backtrace
-mkdir -p logs && gdb -batch -ex "run -win" -ex "bt full" -ex "thread apply all bt" \
-  ./build/linux64-deploy/GeneralsMD/GeneralsXZH 2>&1 | tee logs/gdb.log
-```
+Use `scripts/qa/smoke/test-echelon-*.sh` with explicitly selected retail fixtures. Native executables live under `build/<preset>/Echelon`; standalone binaries live under `build/<preset>/GeneralsX/{Generals,GeneralsMD}`. Capture logs under `logs/`.
 
 ## Linux-Specific Notes
 
-- **Case-sensitive filesystem**: Include paths must match exact case. Use `scripts/tooling/cpp/maintenance/fixIncludesCase.sh`.
+- **Case-sensitive filesystem**: Include paths must match exact case. Use `GeneralsX/scripts/tooling/cpp/maintenance/fixIncludesCase.sh`.
 - **DXVK requires Vulkan**: `vulkan-tools`, `mesa-vulkan-drivers`, or proprietary GPU drivers.
 - **SDL3**: fetched via CMake FetchContent — no system package needed.
-- **DXVK source policy**: fixes go in `references/fbraz3-dxvk`, never in `build/_deps/...`.
-- **CompatLib**: `GeneralsMD/Code/CompatLib/` provides Win32 API compatibility shims (`windows_compat.h`).
+- **DXVK source policy**: fixes go in `GeneralsX/references/fbraz3-dxvk`, never in `build/_deps/...`.
+- **CompatLib**: `GeneralsX/GeneralsMD/Code/CompatLib/` provides Win32 API compatibility shims (`windows_compat.h`).
 - **No native POSIX calls**: use SDL3 abstractions for timers, threads, file I/O. No raw `pthread_*`, `open()`.
 - **`-logToCon`**: only available in debug builds (`RTS_BUILD_OPTION_DEBUG=ON`).
 - **Diagnostics**: prefer `fprintf(stderr, ...)` probes; capture stderr and grep targeted markers.
-
-```bash
-# Recommended debug run
-cd ~/GeneralsX/GeneralsMD
-./run.sh -win -logToCon 2>&1 | grep -v "D3DRS_PATCHSEGMENTS" | tee ~/GeneralsX/logs/manual_run.log
-```

@@ -12,11 +12,6 @@ on:
         type: string
         default: "linux64-deploy"
         description: "CMake preset for Linux"
-      package_format:
-        required: false
-        type: string
-        default: "gzip"
-        description: "Artifact packaging format: gzip or appimage"
   workflow_dispatch:
     inputs:
       preset:
@@ -26,13 +21,6 @@ on:
           - linux64-deploy
           - linux64-testing
         default: linux64-deploy
-      package_format:
-        type: choice
-        description: "Artifact packaging format"
-        options:
-          - gzip
-          - appimage
-        default: gzip
 
 jobs:
   build-linux:
@@ -53,8 +41,6 @@ jobs:
             target: g_generals
             output: GeneralsX
             log_suffix: generals
-        package_format:
-          - ${{ inputs.package_format }}
 
     steps:
       # GeneralsX @build GitHubCopilot 08/05/2026 Use Node 24 compatible GitHub Actions major versions to remove runner deprecation warnings.
@@ -69,7 +55,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /opt/vcpkg
-          key: vcpkg-linux-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-lock.json') }}
+          key: vcpkg-linux-${{ runner.os }}-${{ hashFiles('GeneralsX/vcpkg.json', 'GeneralsX/vcpkg-lock.json') }}
           restore-keys: |
             vcpkg-linux-${{ runner.os }}-
 
@@ -161,7 +147,7 @@ jobs:
       - name: Configure CMake (Linux)
         run: |
           mkdir -p logs
-          cmake --preset ${{ inputs.preset }} 2>&1 | tee logs/configure_linux.log
+          cmake --preset ${{ inputs.preset }} -DRTS_BUILD_UNIVERSAL_LAUNCHER=OFF 2>&1 | tee logs/configure_linux.log
           echo "CMake configuration complete."
 
       - name: Build ${{ matrix.game.value }}
@@ -172,7 +158,7 @@ jobs:
 
       - name: Verify Build Artifacts
         run: |
-          BINARY="build/${{ inputs.preset }}/${{ matrix.game.value }}/${{ matrix.game.output }}"
+          BINARY="build/${{ inputs.preset }}/GeneralsX/${{ matrix.game.value }}/${{ matrix.game.output }}"
           if [ -f "$BINARY" ]; then
             echo "✅ Binary built: ${{ matrix.game.output }} ($BINARY)"
             file "$BINARY"
@@ -182,23 +168,11 @@ jobs:
             exit 1
           fi
 
-      # GeneralsX @build GitHubCopilot 10/04/2026 Package as AppImage (self-contained, no FUSE needed for appimagetool in CI via APPIMAGE_EXTRACT_AND_RUN).
-      - name: Package as AppImage
-        if: success() && matrix.package_format == 'appimage'
-        env:
-          APPIMAGE_EXTRACT_AND_RUN: "1"
-        run: |
-          if [ "${{ matrix.game.value }}" = "GeneralsMD" ]; then
-            ./scripts/build/linux/build-linux-appimage-zh.sh ${{ inputs.preset }}
-          else
-            ./scripts/build/linux/build-linux-appimage-generals.sh ${{ inputs.preset }}
-          fi
-
       # GeneralsX @build GitHubCopilot 10/04/2026 Legacy gzip bundle kept as opt-in fallback for CI/testing.
       - name: Package as gzip bundle
-        if: success() && matrix.package_format == 'gzip'
+        if: success()
         run: |
-          BINARY="build/${{ inputs.preset }}/${{ matrix.game.value }}/${{ matrix.game.output }}"
+          BINARY="build/${{ inputs.preset }}/GeneralsX/${{ matrix.game.value }}/${{ matrix.game.output }}"
           RUNTIME_DIR="/tmp/GeneralsX-${{ matrix.game.value }}-deploy"
           FFMPEG_LIB_DIR="/usr/lib/x86_64-linux-gnu"
           FFMPEG_DEP_LIB_DIR="/lib/x86_64-linux-gnu"
@@ -270,7 +244,7 @@ jobs:
           find "build/${{ inputs.preset }}" -name "libgamespy.so*" -exec cp -v {} "${RUNTIME_DIR}/" \; 2>/dev/null || true
 
           echo "  Copying run.sh wrapper from scripts..."
-          cp -v "scripts/qa/smoke/run-bundled-game.sh" "${RUNTIME_DIR}/run.sh"
+          cp -v "GeneralsX/scripts/qa/smoke/run-bundled-game.sh" "${RUNTIME_DIR}/run.sh"
           chmod +x "${RUNTIME_DIR}/run.sh"
 
           if ! compgen -G "${RUNTIME_DIR}/libgamespy.so*" > /dev/null; then
@@ -306,27 +280,16 @@ jobs:
         if: success()
         run: |
           PRESET="${{ inputs.preset }}"
-          FORMAT="${{ matrix.package_format }}"
           GAME_SLUG="${{ matrix.game.id }}"
           PRESET_SLUG="${{ inputs.preset == 'linux64-deploy' && 'linux64' || inputs.preset }}"
-
-          if [ "${FORMAT}" = "gzip" ]; then
-            echo "name=linux-${GAME_SLUG}-${PRESET_SLUG}-bundle" >> "$GITHUB_OUTPUT"
-            echo "path=/tmp/GeneralsX-${{ matrix.game.value }}-${PRESET}.tar" >> "$GITHUB_OUTPUT"
-          else
-            INPUT_PATH="build/${{ matrix.game.output }}-${PRESET}-x86_64.AppImage"
-            OUTPUT_PATH="/tmp/${{ matrix.game.output }}-${PRESET}-x86_64.AppImage"
-            # GeneralsX @bugfix GitHubCopilot 10/04/2026 Flatten uploaded AppImage artifact structure (no intermediate directories inside zip).
-            cp -f "${INPUT_PATH}" "${OUTPUT_PATH}"
-            echo "name=linux-${GAME_SLUG}-${PRESET_SLUG}-appimage" >> "$GITHUB_OUTPUT"
-            echo "path=${OUTPUT_PATH}" >> "$GITHUB_OUTPUT"
-          fi
+          echo "name=linux-${GAME_SLUG}-${PRESET_SLUG}-bundle" >> "$GITHUB_OUTPUT"
+          echo "path=/tmp/GeneralsX-${{ matrix.game.value }}-${PRESET}.tar" >> "$GITHUB_OUTPUT"
 
       - name: Upload Build Logs
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: build-logs-linux-${{ matrix.game.id }}-${{ matrix.package_format }}
+          name: build-logs-linux-${{ matrix.game.id }}
           path: logs/
           retention-days: 7
 

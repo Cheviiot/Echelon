@@ -45,6 +45,11 @@ jobs:
             target: g_generals
             output: GeneralsX
             log_suffix: generals
+          - id: echelon
+            value: Echelon
+            target: echelon_launcher
+            output: Echelon
+            log_suffix: echelon
 
     steps:
       # GeneralsX @build GitHubCopilot 08/05/2026 Use Node 24 compatible GitHub Actions major versions to remove runner deprecation warnings.
@@ -107,10 +112,7 @@ jobs:
           # glslang (required by DXVK Meson build to compile GLSL shaders to SPIR-V)
           brew install glslang
 
-          # GeneralsX @bugfix fbraz3 20/03/2026 SDL3 must be installed via Homebrew so DXVK's
-          # Meson build discovers it via pkg-config and compiles the SDL3 WSI backend.
-          # Without this, meson falls back to SDL2-only and DXVK_WSI_DRIVER=SDL3 fails at runtime.
-          brew install sdl3
+          # Echelon builds SDL3 once; DXVK receives its exact library and headers through private pkg-config metadata.
 
           # NOTE: OpenAL Soft is intentionally NOT installed via Homebrew.
           # It is fetched via CMake FetchContent in cmake/openal.cmake (v1.24.2).
@@ -345,7 +347,7 @@ jobs:
           echo "VULKAN_SDK=$VULKAN_SDK"
           echo "CC=$CC"
           echo "CXX=$CXX"
-          cmake --preset ${{ inputs.preset }} 2>&1 | tee logs/configure_macos.log
+          cmake --preset ${{ inputs.preset }} -DRTS_BUILD_UNIVERSAL_LAUNCHER=${{ matrix.game.id == 'echelon' && 'ON' || 'OFF' }} 2>&1 | tee logs/configure_macos.log
           CONFIG_STATUS=${PIPESTATUS[0]}
           if [ $CONFIG_STATUS -eq 0 ]; then echo "✅ CMake configuration complete"; else echo "❌ CMake configuration failed"; exit 1; fi
 
@@ -368,7 +370,11 @@ jobs:
 
       - name: Verify Build Artifacts
         run: |
-          BINARY="build/${{ inputs.preset }}/${{ matrix.game.value }}/${{ matrix.game.output }}"
+          if [ "${{ matrix.game.id }}" = echelon ]; then
+            BINARY="build/${{ inputs.preset }}/Echelon/Echelon"
+          else
+            BINARY="build/${{ inputs.preset }}/GeneralsX/${{ matrix.game.value }}/${{ matrix.game.output }}"
+          fi
           if [ -f "$BINARY" ]; then
             echo "✅ Binary built: ${{ matrix.game.output }}"
             file "$BINARY"
@@ -388,61 +394,14 @@ jobs:
             exit 1
           fi
 
-      - name: Bundle .app (GeneralsX macOS Distribution)
-        if: success()
-        env:
-          VULKAN_SDK: ${{ env.VULKAN_SDK }}
+      - name: Test local content and bundle Echelon.app
+        if: matrix.game.id == 'echelon'
         run: |
-          mkdir -p logs
-          echo "Bundling ${{ matrix.game.value }} into macOS .app package..."
-          if [ "${{ matrix.game.value }}" = "GeneralsMD" ]; then
-            echo "Executing: ./scripts/build/macos/bundle-macos-zh.sh"
-            ./scripts/build/macos/bundle-macos-zh.sh 2>&1 | tee logs/bundle_${{ matrix.game.log_suffix }}_macos.log
-          else
-            echo "Executing: ./scripts/build/macos/bundle-macos-generals.sh"
-            ./scripts/build/macos/bundle-macos-generals.sh 2>&1 | tee logs/bundle_${{ matrix.game.log_suffix }}_macos.log
-          fi
-          BUNDLE_STATUS=${PIPESTATUS[0]}
-          OUTPUT_ZIP="${{ matrix.game.output }}-macos-arm64.zip"
-          if [ $BUNDLE_STATUS -eq 0 ]; then
-            echo "✅ Bundle completed successfully"
-            if [ -f "${OUTPUT_ZIP}" ]; then
-              echo "✅ Output: ${OUTPUT_ZIP}"
-              du -sh "${OUTPUT_ZIP}"
-            else
-              echo "❌ Output zip not found: ${OUTPUT_ZIP}"
-              exit 1
-            fi
-          else
-            echo "❌ Bundle script failed; see logs for details"
-            tail -100 logs/bundle_${{ matrix.game.log_suffix }}_macos.log || true
-            exit 1
-          fi
-
-      - name: Prepare .app Artifact
-        if: success()
-        run: |
-          OUTPUT_ZIP="${{ matrix.game.output }}-macos-arm64.zip"
-          APP_NAME="${{ matrix.game.output }}.app"
-          ARTIFACT_DIR="/tmp/macos-artifact-${{ matrix.game.id }}"
-          rm -rf "${ARTIFACT_DIR}"
-          mkdir -p "${ARTIFACT_DIR}"
-
-          unzip -q "${OUTPUT_ZIP}" -d "${ARTIFACT_DIR}"
-
-          if [ ! -d "${ARTIFACT_DIR}/${APP_NAME}" ]; then
-            echo "❌ App bundle not found after extracting ${OUTPUT_ZIP}: ${ARTIFACT_DIR}/${APP_NAME}"
-            find "${ARTIFACT_DIR}" -maxdepth 2 -print
-            exit 1
-          fi
-
-          echo "✅ Prepared app bundle artifact: ${ARTIFACT_DIR}/${APP_NAME}"
-          du -sh "${ARTIFACT_DIR}/${APP_NAME}"
-
-          # GeneralsX @build fbraz3 27/03/2026 Archive .app as tar (no compression) to preserve symlinks and executable bits.
-          BUNDLE_TAR="${ARTIFACT_DIR}/${APP_NAME%.app}.tar"
-          tar -C "${ARTIFACT_DIR}" -cf "${BUNDLE_TAR}" "${APP_NAME}"
-          echo "✅ Archive ready: ${BUNDLE_TAR}"
+          set -o pipefail
+          python3 scripts/qa/test-macos-bundle-dependencies.py
+          cmake --build build/${{ inputs.preset }} --target echelon_settings_tests -j 3
+          ctest --test-dir build/${{ inputs.preset }} -R echelon_local_content --output-on-failure
+          ./scripts/build/macos/bundle-macos-echelon.sh ${{ inputs.preset }} 2>&1 | tee logs/bundle-echelon.log
 
       - name: Upload Build Logs
         if: always()
@@ -452,11 +411,11 @@ jobs:
           path: logs/
           retention-days: 7
 
-      - name: Upload Bundle
-        if: success()
+      - name: Upload Echelon.app bundle
+        if: matrix.game.id == 'echelon'
         uses: actions/upload-artifact@v7
         with:
-          name: macos-${{ matrix.game.id }}-app
-          path: /tmp/macos-artifact-${{ matrix.game.id }}/*.tar
+          name: macos-echelon-app
+          path: build/${{ inputs.preset }}/Echelon-macos-arm64.zip
           retention-days: 7
-          if-no-files-found: warn
+          if-no-files-found: error

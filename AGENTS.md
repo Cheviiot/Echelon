@@ -1,12 +1,12 @@
-# GeneralsX: Instructions for AI Coding Agents
+# Echelon — Instructions for AI Coding Agents
 
 ## What I Am
-GeneralsX is a cross-platform port of Command & Conquer: Generals Zero Hour for **Linux and macOS**, porting legacy Windows DirectX 8 + Miles Sound code to a modern stack (SDL3 + DXVK + OpenAL + 64-bit). This is a **massive C++ game engine** (~500k LOC) preserving retail gameplay while modernizing the platform layer.
+Echelon is a fork of GeneralsX that combines the Command & Conquer: Generals and Zero Hour engine branches behind one launcher for **Linux and macOS**. It preserves the GeneralsX cross-platform stack (SDL3 + DXVK + OpenAL + 64-bit) and keeps the engine in the tracked `GeneralsX/` directory close to upstream for regular reviewed merges.
 
 ## Key Entry Points
-- `GeneralsMD/Code/Main/WinMain.cpp`
-- `Generals/Code/Main/WinMain.cpp`
-- `Core/GameEngineDevice/Source/`
+- `GeneralsX/GeneralsMD/Code/Main/WinMain.cpp`
+- `GeneralsX/Generals/Code/Main/WinMain.cpp`
+- `GeneralsX/Core/GameEngineDevice/Source/`
 
 ## Platform Focus
 - **Active**: Linux (`linux64-deploy`), macOS (`macos-vulkan`)
@@ -22,14 +22,14 @@ GeneralsX is a cross-platform port of Command & Conquer: Generals Zero Hour for 
 | Video   | FFmpeg              | Bink Video (intro/videos)    |
 | Platform| SDL3 + libc         | Win32 POSIX calls            |
 
-**CRITICAL**: Platform code must be isolated to `Core/GameEngineDevice/` and `Core/Libraries/Source/Platform/`. No native Win32/Cocoa/X11 calls in game logic.
+**CRITICAL**: Engine platform code must be isolated to `GeneralsX/Core/GameEngineDevice/` and `GeneralsX/Core/Libraries/Source/Platform/`. Product-specific platform adapters belong in `EngineIntegration/Source/`. No native Win32/Cocoa/X11 calls in game logic.
 
 ## Golden Rules
 1. **Single codebase** – Linux and macOS build from same source
 2. **SDL3 everywhere** – No native platform calls in game code
 3. **DXVK everywhere** – DX8 → Vulkan translation on all platforms
 4. **OpenAL / MiniAudio Parity** – Cross-platform audio stack. Implementations and bug fixes in one MUST be replicated in the other to maintain strict feature parity.
-5. **64-bit native** – x86_64 only (32-bit via VC6 upstream)
+5. **64-bit native** – Linux x86_64 and macOS ARM64 (32-bit VC6 is upstream reference only)
 6. **Retail compatibility** – Original replays and mods must work
 7. **Determinism** – Rendering/audio changes must not affect gameplay logic
 8. **No band-aids** – Fix underlying issues, not symptoms
@@ -56,7 +56,7 @@ To guarantee cross-play between macOS ARM64 and Linux x86_64 without SyncCrash d
 3. **Double-Precision Isolation** – Do not allow implicit `double` promotion in transcendental/power math evaluations (e.g. `gm_sqrt`, `gm_pow`, `gm_atan`). x87 (24-bit mantissa) and NEON (53-bit mantissa) diverge by 1-ULP on double-precision. Ensure all `WWMath` wrappers explicitly accept/return `float` or internally downcast `double` to `float` prior to `gm_*f` execution to guarantee cross-platform bit-identical outputs.
 4. **FPU Environment State Leaks** – Audio drivers (OpenAL/MiniAudio) and OS callbacks aggressively alter hardware FPU registers (e.g., Flush-To-Zero, Rounding mode) for DSP performance. If this state leaks into the main thread, the simulation math diverges. **Always inject `ScopedFPUGuard`** at the boundaries of `GameLogic::update()`, audio thread callbacks, and mouse-picking logic (e.g., `View::pickDrawable()`).
 5. **FMA Contraction** – Fused Multiply-Add combines instructions with infinite intermediate precision, yielding different results on ARM64 vs x86_64. We strictly enforce `-ffp-contract=off` globally (and `/fp:precise` for MSVC). Never bypass this with `-ffast-math` or `/fp:fast`.
-6. **Deep CRC Memory Buffer Logging** – When a sync crash occurs and the root cause isn't obvious, the game automatically dumps a `Debug/deep_crc_YYYY-MM-DD-HH-MM-SS.bin` file containing a binary snapshot of the last 64 frames of state transfers. Use `scripts/qa/parse_deep_crc.py` to inspect these dumps and identify the exact object ID and state data that first diverged between players. Note: This requires the `RTS_BUILD_OPTION_DEEP_CRC=ON` CMake flag (which is enabled by default).
+6. **Deep CRC Memory Buffer Logging** – When a sync crash occurs and the root cause isn't obvious, the game automatically dumps a `Debug/deep_crc_YYYY-MM-DD-HH-MM-SS.bin` file containing a binary snapshot of the last 64 frames of state transfers. Use `GeneralsX/scripts/qa/parse_deep_crc.py` to inspect these dumps and identify the exact object ID and state data that first diverged between players. Note: This requires the `RTS_BUILD_OPTION_DEEP_CRC=ON` CMake flag (which is enabled by default).
 
 ## Reference Repositories
 - **fighter19-dxvk-port** – Primary graphics/platform reference (DXVK + SDL3 on Linux)
@@ -65,64 +65,18 @@ To guarantee cross-play between macOS ARM64 and Linux x86_64 without SyncCrash d
 
 ## Build Commands
 
-### Linux (Docker-based)
-Docker is the recommended build method on Linux hosts to ensure all toolchain requirements are met.
+Run product builds from the repository root. On the maintainer's ALT workstation, use the existing `ubuntu-dev` Distrobox; do not install development dependencies on the host. See [the foundation report](docs/WORKDIR/reports/ECHELON_FOUNDATION.md) for the tested environment and fresh build directory.
 
-*   **Configure Build**:
-    ```bash
-    ./scripts/build/linux/docker-configure-linux.sh linux64-deploy
-    ```
-*   **Build Zero Hour**:
-    ```bash
-    ./scripts/build/linux/docker-build-linux-zh.sh linux64-deploy
-    ```
-*   **Build Generals (Base Game)**:
-    ```bash
-    ./scripts/build/linux/docker-build-linux-generals.sh linux64-deploy
-    ```
-*   **Flatpak Bundle Packaging**:
-    ```bash
-    ./scripts/build/linux/build-linux-flatpak.sh linux64-deploy Generals    # Base game
-    ./scripts/build/linux/build-linux-flatpak.sh linux64-deploy GeneralsMD  # Zero Hour
-    ```
-*   **Optional MinGW Windows Cross-build**:
-    ```bash
-    ./scripts/build/linux/docker-build-mingw-zh.sh mingw-w64-i686
-    ```
+```bash
+cmake --preset linux64-deploy -DRTS_BUILD_UNIVERSAL_LAUNCHER=ON
+cmake --build build/linux64-deploy --target echelon_launcher echelon_settings_tests
+ctest --test-dir build/linux64-deploy -R echelon_local_content --output-on-failure
+./scripts/build/linux/build-linux-flatpak.sh linux64-deploy Echelon
+```
 
-### Native Linux
-*   **Configure & Build via CMake**:
-    ```bash
-    cmake --preset linux64-deploy
-    cmake --build build/linux64-deploy --target z_generals
-    ```
-*   **Deploy**:
-    ```bash
-    ./scripts/build/linux/deploy-linux.sh     # Generals base game
-    ./scripts/build/linux/deploy-linux-zh.sh  # Generals Zero Hour
-    ```
+For macOS, use `macos-vulkan` and `./scripts/build/macos/bundle-macos-echelon.sh macos-vulkan`. The bundle contains both engines. Standalone targets are `g_generals` and `z_generals`; configure `RTS_BUILD_UNIVERSAL_LAUNCHER=OFF` to verify independent engine compilation. Their output directories are `build/<preset>/GeneralsX/Generals` and `build/<preset>/GeneralsX/GeneralsMD`.
 
-### Native macOS
-*   **Configure Build**:
-    ```bash
-    cmake --preset macos-vulkan
-    ```
-*   **Build via Scripts**:
-    ```bash
-    ./scripts/build/macos/build-macos-generals.sh  # Generals base game
-    ./scripts/build/macos/build-macos-zh.sh        # Generals Zero Hour
-    ```
-    *(Alternatively, build via CMake: `cmake --build build/macos-vulkan --target z_generals`)*
-*   **Deploy**:
-    ```bash
-    ./scripts/build/macos/deploy-macos-generals.sh  # Generals base game
-    ./scripts/build/macos/deploy-macos-zh.sh        # Generals Zero Hour
-    ```
-*   **App Bundle Packaging**:
-    ```bash
-    ./scripts/build/macos/bundle-macos-generals.sh  # Generals Mac app bundle
-    ./scripts/build/macos/bundle-macos-zh.sh        # Generals Zero Hour Mac app bundle
-    ```
+Scripts and build guides inside `GeneralsX/` retain upstream assumptions and serve as references. Echelon's maintained entry points are the root CMake presets and root product scripts.
 
 ## Target Priority
 1. **GeneralsXZH** (Zero Hour) – Primary target, most feature-complete
@@ -145,46 +99,34 @@ Docker is the recommended build method on Linux hosts to ensure all toolchain re
 - **Rule**: Never edit files in `build/_deps/...` directly. Always commit fixes in fork repo first.
 
 ## Common Pitfalls
-- **Linux case sensitivity**: Include paths must match exact case. Use `scripts/tooling/cpp/fixIncludesCase.sh`.
+- **Linux case sensitivity**: Include paths must match exact case. Use `GeneralsX/scripts/tooling/cpp/maintenance/fixIncludesCase.sh`.
 - **DXVK needs Vulkan**: Install `vulkan-tools`, `mesa-vulkan-drivers` or GPU drivers.
 - **-logToCon only in debug**: Available only with `RTS_BUILD_OPTION_DEBUG=ON`.
 - **SDL3 from source**: Fetched via CMake FetchContent. No system package needed.
 - **Manual memory**: Always delete/delete[]. Use STLPort for VC6 legacy builds.
 - **Debug options break replays**: Use `RTS_BUILD_OPTION_DEBUG=OFF` for replay tests.
+- **Windows executable icons (.ico)**: Windows builds embed `GeneralsX/Generals/Code/Main/Generals.ico` and `GeneralsX/GeneralsMD/Code/Main/Generals.ico` via `RTS.RC`. If source PNG icon assets (`GeneralsX/assets/generalsx_icon.png` or `GeneralsX/assets/generalsx-zh_icon.png`) are updated, regenerate the multi-resolution `.ico` files (sizes 16, 24, 32, 48, 64, 128, 256) to keep Windows executables in sync.
 
 ## Testing & Validation
-### Smoke test
-```bash
-./scripts/qa/smoke/docker-smoke-test-zh.sh linux64-deploy
-```
 
-### Replay testing
-```bash
-cd ~/GeneralsX/GeneralsMD
-./run.sh -win -logToCon 2>&1 | grep -v "D3DRS_PATCHSEGMENTS" | tee ~/GeneralsX/logs/manual_run.log
-```
+Run `python3 scripts/qa/check-echelon-boundaries.py --build build/<preset>` and the product scripts in `scripts/qa/smoke/`. See their headers for arguments. Runtime tests need explicit retail data fixtures. Never write into the owner's original game directories.
 
-### Debug GDB
-```bash
-mkdir -p logs && gdb -batch -ex "run -win" -ex "bt full" -ex "thread apply all bt" \
-  ./build/linux64-deploy/GeneralsMD/GeneralsXZH 2>&1 | tee logs/gdb.log
-```
+Test both profiles, local content precedence and verification, repeated engine switching, supervisor recovery, and packaged launch. Record unavailable checks as skipped and CRC failures as failures. Do not suppress replay mismatches or loosen deterministic math to make tests pass.
 
 ## Branching & Sync
-### TheSuperHackers upstream sync
-```bash
-git remote add thesuperhackers git@github.com:TheSuperHackers/GeneralsGameCode.git
-git fetch thesuperhackers
-git merge thesuperhackers/main
-```
+### GeneralsX upstream sync
 
-**Conflict resolution**:
-- Platform code (`Core/GameEngineDevice/`): keep ours
-- Game logic (`GeneralsMD/Code/GameEngine/`): keep theirs
-- Build system: merge carefully, test both versions
+The active product upstream is `fbraz3/GeneralsX` (remote `upstream`). The two permanent repository branches are `main` (Echelon product) and `upstream` (locked, exact original history). Never commit product changes to `origin/upstream`; it retains the original root layout, while the product branch integrates the engine under `GeneralsX/`. Preserve history and integrate pinned commits on a `codex/` review branch. Follow [the sync guide](docs/HOWTO/SYNC_GENERALSX_UPSTREAM.md) and [ownership map](docs/WORKDIR/reports/ECHELON_FOUNDATION.md).
+
+- Review conflicts by behavior; do not apply directory-wide ours/theirs rules.
+- Keep the shared engine layout close to upstream. Product code lives in `Launcher/`, the host bridge in `EngineIntegration/`.
+- Validate hosted and standalone builds for both games. Only hosted variants receive `ECHELON_BRAND`, `ECHELON_ENGINE_HOSTED`, and `ECHELON_ENGINE_MODULE_ALLOCATOR`.
+- The mod catalog service was retired by the owner. Do not recreate it or wire a replacement URL. Preserve local imports and isolated transport fixtures.
+- Product identity is Echelon, application ID `io.github.cheviiot.Echelon`, data root `$HOME/.Echelon`. Do not migrate or discover old app roots automatically.
+- TheSuperHackers remains a reference baseline; its changes normally arrive through GeneralsX.
 
 ## Code Conventions
-- **Annotate changes**: `// GeneralsX @keyword author DD/MM/YYYY Description`
+- **Annotate new fork changes**: `// Echelon @keyword author DD/MM/YYYY Description`. Preserve historical `// GeneralsX @keyword ...` annotations.
 - **Keywords**: `@bugfix` / `@feature` / `@performance` / `@refactor` / `@tweak` / `@build`
 - **Attribution**: Add upstream PR references with author and GitHub URL
 - **English only**: All code, comments, documentation
@@ -206,17 +148,17 @@ git merge thesuperhackers/main
 
 ## Git Commit Standards
 - **Conventional Commits**: Format must be `<type>(optional scope): <description>`. (e.g. `fix(audio): restart sound groups in reset`)
-- **DO NOT use `@`**: The commit message (both title and body) must never contain an `@` symbol. The `// GeneralsX @keyword` format is strictly for inline code annotations in C++ files. Do not append these signatures to commit messages.
+- **DO NOT use `@`**: Neither commit subjects nor bodies may contain `@`. Inline source annotations are separate from commit messages.
 - **Imperative mood**: Use "add", "fix", "change" (not "added" or "fixes").
 - **Read the Docs**: For full details, valid types, and PR standards, you **MUST** read `.github/instructions/git-commit.instructions.md`.
 
 ## VS Code Tasks
 - Prefer task-first execution for build/test/debug
 - Logs captured to `logs/` directory
-- Primary labels: `[Linux]`, `[macOS]`, `[Linux] Pipeline: Build + Deploy + Run ZH`
+- Primary labels: `Echelon: Configure`, `Echelon: Build`, `Echelon: Test`
 
 ## Docs Workflow
-1. Monthly diary in `docs/WORKLOG/YYYY-MM-DIARY.md` (YYYY=year, MM=month only, e.g., `2026-05-DIARY.md`)
+1. Monthly diary in `docs/WORKLOG/YYYY-MM-DIARY.md` (YYYY=year, MM=month only, e.g., `2026-05-DIARY.md`), always including the standard AI-generated content disclosure note at the top
 2. Active work notes in `docs/WORKDIR/` (phases/planning/reports/support/audit/lessons)
 3. Step-by-step tutorials in `docs/HOWTO/` (user-facing guides for common tasks)
 4. Never drop working docs directly under `docs/` root
@@ -263,10 +205,10 @@ printf "%s" "$body" | rg '\\n' && echo "HAS_LITERAL_BACKSLASH_N=YES" || echo "HA
 - **win32** – MSVC 2022, experimental
 
 ## Directories
-- `GeneralsMD/`: Zero Hour.
-- `Generals/`: base game.
-- `Core/`: shared libraries.
-- `references/`: fbraz3-dxvk
+- `GeneralsX/GeneralsMD/`: Zero Hour.
+- `GeneralsX/Generals/`: base game.
+- `GeneralsX/Core/`: shared libraries.
+- `GeneralsX/references/`: fbraz3-dxvk
 - `docs/WORKDIR/`: current work docs.
 - `docs/HOWTO/`: user-facing step-by-step tutorials (SagePatch config, etc.)
 - `logs/`: build/run/debug logs.
@@ -283,10 +225,10 @@ The `**` at applyTo means all files, you MUST load it everytime.
 |---|---|---|
 | [.github/instructions/git-commit.instructions.md](.github/instructions/git-commit.instructions.md) | `**` | Commit/PR message standards |
 | [.github/instructions/cpp-conventions.instructions.md](.github/instructions/cpp-conventions.instructions.md) | `**/*.{cpp,h,hpp,c}` | Code style, annotations, platform isolation |
-| [.github/instructions/build.instructions.md](.github/instructions/build.instructions.md) | `cmake/**,CMakeLists.txt,CMakePresets.json` | Build presets, DXVK source of truth |
-| [.github/instructions/platform-linux.instructions.md](.github/instructions/platform-linux.instructions.md) | `scripts/build/linux/**` | Linux build notes |
-| [.github/instructions/platform-macos.instructions.md](.github/instructions/platform-macos.instructions.md) | `scripts/build/macos/**,references/fbraz3-dxvk/**` | macOS/DXVK build notes |
+| [.github/instructions/build.instructions.md](.github/instructions/build.instructions.md) | `cmake/**,CMakeLists.txt,CMakePresets.json,GeneralsX/**/CMakeLists.txt,GeneralsX/cmake/**` | Build presets, DXVK source of truth |
+| [.github/instructions/platform-linux.instructions.md](.github/instructions/platform-linux.instructions.md) | `scripts/build/linux/**,GeneralsX/scripts/build/linux/**` | Linux build notes |
+| [.github/instructions/platform-macos.instructions.md](.github/instructions/platform-macos.instructions.md) | `scripts/build/macos/**,GeneralsX/scripts/build/macos/**,GeneralsX/references/fbraz3-dxvk/**` | macOS/DXVK build notes |
 | [.github/instructions/docs.instructions.md](.github/instructions/docs.instructions.md) | `**/*.md` | Documentation structure and workflow |
-| [.github/instructions/scripts.instructions.md](.github/instructions/scripts.instructions.md) | `scripts/**` | Script organization and naming |
+| [.github/instructions/scripts.instructions.md](.github/instructions/scripts.instructions.md) | `scripts/**,GeneralsX/scripts/**` | Script organization and naming |
 
 Update this table when instruction files are added, removed, or renamed.

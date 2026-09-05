@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Echelon
+Name[ru]=Echelon
+Comment=Unified launcher for Generals and Zero Hour
+Comment[ru]=Единый лаунчер Generals и Zero Hour
+Icon=io.github.cheviiot.Echelon
+Exec=echelon-wrapper.sh
+Type=Application
+Categories=Game;StrategyGame;
+StartupNotify=true
+Terminal=false

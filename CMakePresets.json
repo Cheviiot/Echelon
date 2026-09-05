@@ -84,7 +84,8 @@
                 "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "$<$<CONFIG:Release,Debug,RelWithDebInfo>:Embedded>",
                 "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-                "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets"
+                "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/GeneralsX/triplets",
+                "VCPKG_MANIFEST_DIR": "${sourceDir}/GeneralsX"
             }
         },
         {
@@ -210,7 +211,8 @@
                 "SAGE_USE_GLM": "ON",
                 "SAGE_UPDATE_CHECK": "ON",
                 "RTS_CRASHDUMP_ENABLE": "OFF",
-                "RTS_BUILD_OPTION_FFMPEG": "ON"
+                "RTS_BUILD_OPTION_FFMPEG": "ON",
+                "RTS_BUILD_UNIVERSAL_LAUNCHER": "ON"
             }
         },
         {
@@ -245,7 +247,7 @@
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo",
                 "CMAKE_OSX_ARCHITECTURES": "arm64",
                 "CMAKE_OSX_DEPLOYMENT_TARGET": "15.0",
-                "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/triplets",
+                "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/GeneralsX/triplets",
                 "SAGE_USE_DX8": "OFF",
                 "SAGE_USE_SDL3": "ON",
                 "SAGE_USE_OPENAL": "OFF",
@@ -255,7 +257,8 @@
                 "SAGE_UPDATE_CHECK": "ON",
                 "RTS_CRASHDUMP_ENABLE": "OFF",
                 "RTS_BUILD_OPTION_FFMPEG": "ON",
-                "RTS_BUILD_OPTION_SAGE_PATCH": "ON"
+                "RTS_BUILD_OPTION_SAGE_PATCH": "ON",
+                "RTS_BUILD_UNIVERSAL_LAUNCHER": "ON"
             },
             "environment": {
                 "PKG_CONFIG_PATH": "/opt/homebrew/lib/pkgconfig"
@@ -274,7 +277,7 @@
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo",
                 "CMAKE_OSX_ARCHITECTURES": "arm64",
                 "CMAKE_OSX_DEPLOYMENT_TARGET": "15.0",
-                "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/triplets",
+                "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/GeneralsX/triplets",
                 "SAGE_USE_DX8": "OFF",
                 "SAGE_USE_SDL3": "ON",
                 "SAGE_USE_OPENAL": "ON",
