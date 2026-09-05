@@ -223,7 +223,7 @@ void SubsystemInterfaceList::shutdownAll()
 	{
 		SubsystemInterface* sys = m_subsystems[index - 1];
 		delete sys;
-		// GeneralsArsenal @bugfix Codex 13/08/2026 Never leave a deleted subsystem reachable through its singleton.
+		// Echelon @bugfix Codex 13/08/2026 Never leave a deleted subsystem reachable through its singleton.
 		if (index <= m_registrations.size()) {
 			const SubsystemRegistration &registration = m_registrations[index - 1];
 			if (registration.subsystem == sys && registration.clearSingleton && registration.singletonStorage) {

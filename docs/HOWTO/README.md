@@ -1,13 +1,13 @@
 # HOWTO Tutorials
 
-Step-by-step guides for common tasks in Generals: Arsenal.
+Step-by-step guides for common tasks in Echelon.
 
 ## Available Tutorials
 
 | Tutorial | Description |
 |---|---|
-| [Installation](INSTALLATION.md) | Install Generals: Arsenal on Linux (Flatpak) or macOS |
-| [Arsenal Launcher](GENERALS_ARSENAL_LAUNCHER.md) | Select Generals or Zero Hour, import data, and use launcher CLI profiles |
+| [Installation](INSTALLATION.md) | Install Echelon on Linux (Flatpak) or macOS |
+| [Echelon Launcher](ECHELON_LAUNCHER.md) | Select Generals or Zero Hour, import data, and use launcher CLI profiles |
 | [Synchronize GeneralsX Upstream](SYNC_GENERALSX_UPSTREAM.md) | Merge reviewed GeneralsX updates into a dated synchronization branch |
 | [Getting the Game Files](GETTING_THE_GAME_FILES.md) | Obtain original game assets (Steam, CrossOver, SteamCMD) |
 | [SagePatch Configuration](SAGEPATCH_CONFIGURATION.md) | Configure camera height, scroll speed, terrain draw distance, and other QoL settings |

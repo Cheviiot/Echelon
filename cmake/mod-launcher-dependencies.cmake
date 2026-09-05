@@ -1,4 +1,4 @@
-# GeneralsArsenal @build Codex 14/08/2026 Pin the native mod manager's portable catalog and transport dependencies.
+# Echelon @build Codex 14/08/2026 Pin the native mod manager's portable catalog and transport dependencies.
 find_package(CURL REQUIRED)
 find_package(OpenSSL REQUIRED)
 

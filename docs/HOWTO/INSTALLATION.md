@@ -1,4 +1,4 @@
-# How to Install Generals: Arsenal
+# How to Install Echelon
 
 ## Prerequisites
 
@@ -6,7 +6,7 @@
 
    > **On macOS or Linux?** This title is Windows-only on Steam. On macOS, Steam usually does not show an install option. On Linux, installation may be available via Steam Play/Proton depending on your configuration. See [GETTING_THE_GAME_FILES.md](GETTING_THE_GAME_FILES.md) for all supported ways to obtain game files.
 
-2. Keep the original Generals and Zero Hour game data available on the machine. On first launch, the launcher can import a selected source directory into `$HOME/.GeneralsArsenal/Generals` or `$HOME/.GeneralsArsenal/GeneralsZH`. It does not inspect or migrate GeneralsX directories automatically.
+2. Keep the original Generals and Zero Hour game data available on the machine. On first launch, the launcher can import a selected source directory into `$HOME/.Echelon/Generals` or `$HOME/.Echelon/GeneralsZH`. It does not inspect or migrate GeneralsX directories automatically.
 
 ## Linux
 
@@ -16,4 +16,4 @@
 
    Each Linux distribution packages Flatpak differently, so rely on the upstream instructions for installing the Flatpak tool itself.
 
-2. Download the unified Linux Flatpak release asset (`GeneralsArsenal-linux.flatpak`). It contains the launcher and both open-source engine modules, but no retail assets.
+2. Download the unified Linux Flatpak release asset (`Echelon-linux.flatpak`). It contains the launcher and both open-source engine modules, but no retail assets.

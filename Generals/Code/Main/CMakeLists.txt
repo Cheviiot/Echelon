@@ -115,8 +115,8 @@ if(RTS_BUILD_UNIVERSAL_LAUNCHER AND SAGE_USE_SDL3 AND UNIX)
     )
     target_link_libraries(g_generals_module PRIVATE
         d3dx8
-        g_gameengine
-        g_gameenginedevice
+        g_gameengine_host
+        g_gameenginedevice_host
         gi_always
         sdl3lib
     )
@@ -126,20 +126,21 @@ if(RTS_BUILD_UNIVERSAL_LAUNCHER AND SAGE_USE_SDL3 AND UNIX)
         ${CMAKE_BINARY_DIR}/Code/Libraries
     )
     target_compile_definitions(g_generals_module PRIVATE
-        GENERALS_ARSENAL_ENGINE_MODULE=1
-        GENERALS_ARSENAL_ENGINE_BUILD=1
+        ECHELON_ENGINE_HOSTED=1
+        ECHELON_ENGINE_MODULE=1
+        ECHELON_ENGINE_BUILD=1
     )
     set_target_properties(g_generals_module PROPERTIES
-        OUTPUT_NAME GeneralsArsenalGeneralsEngine
+        OUTPUT_NAME EchelonGeneralsEngine
         CXX_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN YES
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${GENERALS_ARSENAL_OUTPUT_DIRECTORY}"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${ECHELON_OUTPUT_DIRECTORY}"
     )
     if(APPLE)
-        target_link_options(g_generals_module PRIVATE "-Wl,-exported_symbol,_GeneralsArsenal_GetEngineModuleV2")
+        target_link_options(g_generals_module PRIVATE "-Wl,-exported_symbol,_Echelon_GetEngineModuleV2")
     else()
         target_link_options(g_generals_module PRIVATE
-            "-Wl,--version-script=${CMAKE_SOURCE_DIR}/Core/GameEngineDevice/Source/GeneralsArsenalLauncher/engine-module.exports"
+            "-Wl,--version-script=${CMAKE_SOURCE_DIR}/Core/GameEngineDevice/Source/LauncherIntegration/engine-module.exports"
             "-Wl,--exclude-libs,ALL"
             "-Wl,-Bsymbolic"
         )

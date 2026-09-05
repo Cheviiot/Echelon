@@ -32,8 +32,8 @@
 #include "Common/version.h"
 
 #include "gitinfo.h"
-#ifdef GENERALS_ARSENAL_BRAND
-#include "GeneralsArsenalLauncher/BrandIdentity.h"
+#ifdef ECHELON_BRAND
+#include "LauncherIntegration/BrandIdentity.h"
 #endif
 #include <ctype.h>
 #include <stdio.h>
@@ -325,9 +325,9 @@ UnicodeString Version::getUnicodeBuildUserOrGitCommitAuthorName() const
 
 UnicodeString Version::getUnicodeProductTitle() const
 {
-	// GeneralsArsenal @feature Codex 13/08/2026 Retain the upstream version formatter with the fork brand supplied centrally.
-#ifdef GENERALS_ARSENAL_BRAND
-	return GeneralsArsenalBrand::kProductNameWide;
+	// Echelon @feature Codex 13/08/2026 Retain the upstream version formatter with the fork brand supplied centrally.
+#ifdef ECHELON_BRAND
+	return EchelonBrand::kProductNameWide;
 #else
 	return L"GeneralsX";
 #endif
@@ -469,10 +469,10 @@ UnicodeString Version::getUnicodeProjectWatermark() const
 	if (GitTag && GitTag[0] != '\0')
 	{
 		const char* tagBase = GitTag;
-#ifdef GENERALS_ARSENAL_BRAND
-		const size_t tagPrefixLength = strlen(GeneralsArsenalBrand::kReleaseTagPrefix);
-		if (strncmp(tagBase, GeneralsArsenalBrand::kReleaseTagPrefix, tagPrefixLength) == 0 ||
-			strncmp(tagBase, GeneralsArsenalBrand::kReleaseTagPrefixLower, tagPrefixLength) == 0)
+#ifdef ECHELON_BRAND
+		const size_t tagPrefixLength = strlen(EchelonBrand::kReleaseTagPrefix);
+		if (strncmp(tagBase, EchelonBrand::kReleaseTagPrefix, tagPrefixLength) == 0 ||
+			strncmp(tagBase, EchelonBrand::kReleaseTagPrefixLower, tagPrefixLength) == 0)
 		{
 			tagBase += tagPrefixLength;
 		}
@@ -494,9 +494,9 @@ UnicodeString Version::getUnicodeProjectWatermark() const
 		snprintf(versionSuffix, sizeof(versionSuffix), " - %s", formattedTag);
 	}
 
-	// GeneralsArsenal @feature Codex 13/08/2026 Keep Beta-16 watermark behavior without exposing the upstream product identity.
-#ifdef GENERALS_ARSENAL_BRAND
-	snprintf(finalCredit, sizeof(finalCredit), "%s%s", GeneralsArsenalBrand::kProjectWatermark, versionSuffix);
+	// Echelon @feature Codex 13/08/2026 Keep Beta-16 watermark behavior without exposing the upstream product identity.
+#ifdef ECHELON_BRAND
+	snprintf(finalCredit, sizeof(finalCredit), "%s%s", EchelonBrand::kProjectWatermark, versionSuffix);
 #else
 	snprintf(finalCredit, sizeof(finalCredit), "GeneralsX - Cross Platform C&C Generals%s", versionSuffix);
 #endif

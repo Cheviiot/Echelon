@@ -303,7 +303,7 @@ GameEngine::~GameEngine()
 	delete TheFileSystem;
 	TheFileSystem = nullptr;
 
-	// GeneralsArsenal @bugfix Codex 13/08/2026 Release the non-subsystem LOD singleton between launcher sessions.
+	// Echelon @bugfix Codex 13/08/2026 Release the non-subsystem LOD singleton between launcher sessions.
 	delete TheGameLODManager;
 	TheGameLODManager = nullptr;
 
@@ -319,7 +319,7 @@ GameEngine::~GameEngine()
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool GeneralsArsenalAreEngineSubsystemSingletonsReleased()
+Bool EchelonAreEngineSubsystemSingletonsReleased()
 {
 	return TheSubsystemList == nullptr && TheMapCache == nullptr && TheSkirmishGameInfo == nullptr &&
 		TheNetwork == nullptr && TheCommandList == nullptr && TheNameKeyGenerator == nullptr && TheFileSystem == nullptr &&
@@ -1209,4 +1209,3 @@ extern const Bool TheSystemIsUnicode = (((void*) (::MessageBox)) == ((void*) (::
 #else
 extern const Bool TheSystemIsUnicode = true;  // Linux: Always Unicode (UTF-8)
 #endif
-

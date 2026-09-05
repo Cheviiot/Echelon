@@ -324,7 +324,7 @@ GameEngine::~GameEngine()
 }
 
 //-------------------------------------------------------------------------------------------------
-Bool GeneralsArsenalAreEngineSubsystemSingletonsReleased()
+Bool EchelonAreEngineSubsystemSingletonsReleased()
 {
 	return TheSubsystemList == nullptr && TheMapCache == nullptr && TheSkirmishGameInfo == nullptr &&
 		TheChallengeGameInfo == nullptr && TheNetwork == nullptr && TheCommandList == nullptr &&

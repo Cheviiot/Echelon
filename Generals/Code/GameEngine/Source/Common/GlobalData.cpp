@@ -1341,21 +1341,18 @@ UnsignedInt GlobalData::generateExeCRC()
 
 AsciiString GlobalData::BuildUserDataPathFromIni()
 {
-	AsciiString userDataDir;
-
-#ifndef _WIN32
-	// GeneralsX @feature Codex 11/08/2026 Let the universal launcher provide the canonical per-engine user-data directory.
-	if (const char *launcherUserDataRoot = getenv("GENERALS_ARSENAL_USER_DATA_ROOT"))
-	{
-		if (launcherUserDataRoot[0])
-		{
-			std::filesystem::path path = std::filesystem::path(launcherUserDataRoot) / "";
+#if defined(ECHELON_ENGINE_HOSTED)
+	// Echelon @feature Codex 05/09/2026 Only hosted engines consume the launcher's user-data path.
+	if (const char *root = getenv("ECHELON_USER_DATA_ROOT")) {
+		if (root[0]) {
+			std::filesystem::path path = std::filesystem::path(root) / "";
 			std::filesystem::create_directories(path);
-			userDataDir = path.string().c_str();
-			return userDataDir;
+			return AsciiString(path.string().c_str());
 		}
 	}
 #endif
+
+	AsciiString userDataDir;
 
 #ifdef _WIN32
 	// GeneralsX @refactor Bender 01/04/2026 Windows-specific path handling
@@ -1409,11 +1406,12 @@ AsciiString GlobalData::BuildUserDataPathFromIni()
 	userDataDir = myDocumentsDirectory;
 
 #elif defined(__APPLE__)
-	// GeneralsArsenal @feature Codex 12/08/2026 Keep standalone engine data inside the Arsenal root.
+	// GeneralsX @feature Bender 01/04/2026 macOS user data directory
+	// Uses ~/Library/Application Support as standard macOS location
 	{
 		const char* home = getenv("HOME");
 		if (home) {
-			std::filesystem::path path = std::filesystem::path(home) / ".GeneralsArsenal" / "UserData" / "Generals" / "";
+			std::filesystem::path path = std::filesystem::path(home) / "Library" / "Application Support" / "GeneralsX" / "Generals" / "";
 			std::filesystem::create_directories(path);
 			userDataDir = path.string().c_str();
 		} else {
@@ -1422,16 +1420,22 @@ AsciiString GlobalData::BuildUserDataPathFromIni()
 	}
 
 #else
-	// GeneralsArsenal @feature Codex 12/08/2026 Keep standalone engine data inside the Arsenal root.
+	// GeneralsX @feature Bender 01/04/2026 Linux user data directory
+	// Uses XDG Base Directory specification
 	{
 		std::filesystem::path path;
+		const char* xdgDataHome = getenv("XDG_DATA_HOME");
 		const char* home = getenv("HOME");
-
-		if (home) {
-			path = std::filesystem::path(home) / ".GeneralsArsenal" / "UserData" / "Generals";
+		
+		if (xdgDataHome) {
+			path = std::filesystem::path(xdgDataHome);
+		} else if (home) {
+			path = std::filesystem::path(home) / ".local" / "share";
 		} else {
 			path = ".";
 		}
+
+		path = path / "GeneralsX" / "Generals" / "";
 		std::filesystem::create_directories(path);
 		userDataDir = path.string().c_str();
 	}

@@ -149,7 +149,7 @@ jobs:
 
           echo "Installing Flatpak bundle: $FLATPAK_FILE"
           flatpak --user install -y "$FLATPAK_FILE"
-          flatpak --user info io.github.cheviiot.GeneralsArsenal
+          flatpak --user info io.github.cheviiot.Echelon
 
       # -----------------------------------------------------------------------
       # 4. Check out and extract game assets (password-protected 7z, uses LFS)
@@ -276,7 +276,7 @@ jobs:
       - name: Set up user data directories (Linux)
         if: inputs.platform == 'linux' || inputs.platform == 'linux-flatpak'
         run: |
-          USER_DATA="$HOME/.GeneralsArsenal/UserData/GeneralsZH"
+          USER_DATA="$HOME/.Echelon/UserData/GeneralsZH"
           MAPS_DIR="$USER_DATA/Maps"
           REPLAYS_DIR="$USER_DATA/Replays"
           mkdir -p "$MAPS_DIR" "$REPLAYS_DIR"
@@ -303,8 +303,8 @@ jobs:
       - name: Install game assets (Linux Flatpak)
         if: inputs.platform == 'linux-flatpak'
         run: |
-          GENERALS_DATA="$HOME/.GeneralsArsenal/Generals"
-          ZEROHOUR_DATA="$HOME/.GeneralsArsenal/GeneralsZH"
+          GENERALS_DATA="$HOME/.Echelon/Generals"
+          ZEROHOUR_DATA="$HOME/.Echelon/GeneralsZH"
           mkdir -p "$GENERALS_DATA" "$ZEROHOUR_DATA"
           echo "Copying Generals assets into: $GENERALS_DATA"
           cp -r /tmp/cached-assets/Generals/. "$GENERALS_DATA/"
@@ -317,7 +317,7 @@ jobs:
       - name: Set up user data directories (macOS)
         if: inputs.platform == 'macos'
         run: |
-          USER_DATA="$HOME/.GeneralsArsenal/UserData/GeneralsZH"
+          USER_DATA="$HOME/.Echelon/UserData/GeneralsZH"
           MAPS_DIR="$USER_DATA/Maps"
           REPLAYS_DIR="$USER_DATA/Replays"
           mkdir -p "$MAPS_DIR" "$REPLAYS_DIR"
@@ -433,7 +433,7 @@ jobs:
             echo "=== $NAME ==="
 
             set +e
-            OUTPUT=$(timeout 180 flatpak run --env=SDL_VIDEODRIVER=dummy --env=SDL_AUDIODRIVER=dummy --env=DXVK_LOG_LEVEL=none io.github.cheviiot.GeneralsArsenal --profile=zerohour -headless -replay "$rep" 2>&1)
+            OUTPUT=$(timeout 180 flatpak run --env=SDL_VIDEODRIVER=dummy --env=SDL_AUDIODRIVER=dummy --env=DXVK_LOG_LEVEL=none io.github.cheviiot.Echelon --profile=zerohour -headless -replay "$rep" 2>&1)
             CODE=$?
             set -e
 

@@ -277,3 +277,6 @@ endif()
 
 
 # CURL::libcurl is now propagated transitively via corei_gameengine_public (Core/GameEngine/CMakeLists.txt).
+if(RTS_BUILD_UNIVERSAL_LAUNCHER)
+    echelon_add_host_variant(z_gameenginedevice)
+endif()

@@ -34,8 +34,8 @@
 #include "Common/GameMemory.h"
 #include "Common/LocalFileSystem.h"
 #include "Common/Registry.h"
-#include "GeneralsArsenalLauncher/ArchiveLoadPolicy.h"
-#include "GeneralsArsenalLauncher/ContentLayerRuntime.h"
+#include "LauncherIntegration/ArchiveLoadPolicy.h"
+#include "LauncherIntegration/ContentLayerRuntime.h"
 
 #include "StdDevice/Common/StdBIGFile.h"
 #include "StdDevice/Common/StdBIGFileSystem.h"
@@ -348,7 +348,7 @@ static Bool loadPrimaryGameAssets(TBigFileSystem* fileSystem, AsciiString* loade
 	}
 
 	// Backward compatibility with previous env naming.
-	const char* compatibilityEnvValue = getenv("GENERALS_ARSENAL_ASSET_PATH");
+	const char* compatibilityEnvValue = getenv("ECHELON_ASSET_PATH");
 	AsciiString sanitizedCompatibilityEnvPath;
 	if (sanitizeConfiguredPath(compatibilityEnvValue, sanitizedCompatibilityEnvPath)) {
 		if (tryLoadBigFiles(fileSystem, sanitizedCompatibilityEnvPath, "env-compat")) {
@@ -440,7 +440,7 @@ static void loadBaseGeneralsAssetsForZH(TBigFileSystem* fileSystem, const AsciiS
 		}
 	}
 
-	const char* compatibilityBaseEnvValue = getenv("GENERALS_ARSENAL_GENERALS_ASSET_PATH");
+	const char* compatibilityBaseEnvValue = getenv("ECHELON_GENERALS_ASSET_PATH");
 	if (compatibilityBaseEnvValue != nullptr && compatibilityBaseEnvValue[0] != '\0') {
 		if (tryLoadBigFiles(fileSystem, AsciiString(compatibilityBaseEnvValue), "env-generals-compat")) {
 			return;
@@ -516,10 +516,10 @@ void StdBIGFileSystem::init() {
 	loadBaseGeneralsAssetsForZH(this, primaryAssetsDirectory);
 #endif
 
-	// GeneralsArsenal @feature Codex 15/08/2026 Preserve SAGE's lexicographic archive priority inside every managed layer.
+	// Echelon @feature Codex 15/08/2026 Preserve SAGE's lexicographic archive priority inside every managed layer.
 	// ArchiveFileSystem prepends archives mounted with overwrite=TRUE. Mounting a layer in reverse filename order therefore
 	// keeps names such as "!!Patch.big" above "!Fallback.big", while the complete layer still shadows all earlier layers.
-	for (const GeneralsArsenalContentRuntime::ContentLayer &layer : GeneralsArsenalContentRuntime::Layers()) {
+	for (const EchelonContentRuntime::ContentLayer &layer : EchelonContentRuntime::Layers()) {
 		std::vector<std::filesystem::path> archives;
 		std::error_code layerError;
 		for (std::filesystem::directory_iterator iterator(layer.rootPath,
@@ -529,7 +529,7 @@ void StdBIGFileSystem::init() {
 			std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char character) {
 				return static_cast<char>(std::tolower(character));
 			});
-			// GeneralsArsenal @feature Codex 15/08/2026 Mount legacy .gib packages directly instead of recreating GenLauncher's retail symlink trick.
+			// Echelon @feature Codex 15/08/2026 Mount legacy .gib packages directly instead of recreating GenLauncher's retail symlink trick.
 			if (!iterator->is_symlink(layerError) && iterator->is_regular_file(layerError) &&
 				(extension == ".big" || extension == ".gib")) {
 				archives.push_back(iterator->path());
@@ -543,7 +543,7 @@ void StdBIGFileSystem::init() {
 			iterator != archives.rend(); ++iterator) {
 			const std::filesystem::path &archivePath = *iterator;
 			const std::string archiveName = archivePath.string();
-			if (GeneralsArsenalArchivePolicy::IsArchiveDisabled(archiveName.c_str())) continue;
+			if (EchelonArchivePolicy::IsArchiveDisabled(archiveName.c_str())) continue;
 			ArchiveFile *archiveFile = openArchiveFile(archiveName.c_str());
 			if (!archiveFile) continue;
 			loadIntoDirectoryTree(archiveFile, TRUE);
@@ -555,7 +555,7 @@ void StdBIGFileSystem::init() {
 			loaded = TRUE;
 		}
 
-		// GeneralsArsenal @test Codex 15/08/2026 Verify final duplicate resolution against the original SAGE filename order.
+		// Echelon @test Codex 15/08/2026 Verify final duplicate resolution against the original SAGE filename order.
 		std::sort(mountedArchives.begin(), mountedArchives.end(),
 			[](const std::pair<std::filesystem::path, ArchiveFile *> &left,
 				const std::pair<std::filesystem::path, ArchiveFile *> &right) { return left.first < right.first; });
@@ -722,9 +722,9 @@ Bool StdBIGFileSystem::loadBigFilesFromDirectory(AsciiString dir, AsciiString fi
 	Bool actuallyAdded = FALSE;
 	FilenameListIter it = filenameList.begin();
 	while (it != filenameList.end()) {
-		// GeneralsArsenal @feature Codex 13/08/2026 Let the launcher disable exact optional BIG archives without touching retail files.
-		if (GeneralsArsenalArchivePolicy::IsArchiveDisabled((*it).str())) {
-			fprintf(stderr, "INFO: Generals: Arsenal skipped BIG archive by launch policy: %s\n", (*it).str());
+		// Echelon @feature Codex 13/08/2026 Let the launcher disable exact optional BIG archives without touching retail files.
+		if (EchelonArchivePolicy::IsArchiveDisabled((*it).str())) {
+			fprintf(stderr, "INFO: Echelon skipped BIG archive by launch policy: %s\n", (*it).str());
 			fflush(stderr);
 			it++;
 			continue;

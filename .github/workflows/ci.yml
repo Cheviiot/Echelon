@@ -1,4 +1,4 @@
-name: Generals Arsenal CI
+name: Echelon CI
 
 permissions:
   contents: read
@@ -63,14 +63,14 @@ jobs:
           echo "| Target | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
           if [ "${{ steps.filter.outputs.zh-should-build }}" = "true" ]; then
-            echo "| Arsenal: Zero Hour engine (GeneralsMD) | ✅ Changes detected |" >> $GITHUB_STEP_SUMMARY
+            echo "| Echelon: Zero Hour engine (GeneralsMD) | ✅ Changes detected |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "| Arsenal: Zero Hour engine (GeneralsMD) | ⏭️ No changes |" >> $GITHUB_STEP_SUMMARY
+            echo "| Echelon: Zero Hour engine (GeneralsMD) | ⏭️ No changes |" >> $GITHUB_STEP_SUMMARY
           fi
           if [ "${{ steps.filter.outputs.base-should-build }}" = "true" ]; then
-            echo "| Arsenal: Generals engine (Generals) | ✅ Changes detected |" >> $GITHUB_STEP_SUMMARY
+            echo "| Echelon: Generals engine (Generals) | ✅ Changes detected |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "| Arsenal: Generals engine (Generals) | ⏭️ No changes |" >> $GITHUB_STEP_SUMMARY
+            echo "| Echelon: Generals engine (Generals) | ⏭️ No changes |" >> $GITHUB_STEP_SUMMARY
           fi
 
   build-linux-flatpak:
@@ -105,7 +105,7 @@ jobs:
     uses: ./.github/workflows/replay-tests.yml
     with:
       platform: linux-flatpak
-      game-artifact: linux-flatpak-generals-arsenal-linux64-deploy
+      game-artifact: linux-flatpak-echelon-linux64-deploy
     secrets:
       ASSETS_KEY: ${{ secrets.ASSETS_KEY }}
 
@@ -138,7 +138,7 @@ jobs:
     steps:
       - name: Generate Summary
         run: |
-          echo "### Generals: Arsenal Multi-Platform Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "### Echelon Multi-Platform Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY

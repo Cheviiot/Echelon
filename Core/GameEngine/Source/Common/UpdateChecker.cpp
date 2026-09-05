@@ -26,8 +26,8 @@
 #include "Common/GlobalData.h"
 
 #include "gitinfo.h"
-#ifdef GENERALS_ARSENAL_BRAND
-#include "GeneralsArsenalLauncher/BrandIdentity.h"
+#ifdef ECHELON_BRAND
+#include "LauncherIntegration/BrandIdentity.h"
 #endif
 
 #include <SDL3/SDL.h>
@@ -53,9 +53,9 @@ static char          s_latestTag[128] = {0};
 // ---------------------------------------------------------------------------
 const char* UpdateChecker::getReleasesUrl()
 {
-#ifdef GENERALS_ARSENAL_BRAND
-    // GeneralsArsenal @feature Codex 13/08/2026 Query the fork's release channel while retaining the upstream checker.
-    return GeneralsArsenalBrand::kReleaseApiUrl;
+#ifdef ECHELON_BRAND
+    // Echelon @feature Codex 13/08/2026 Query the fork's release channel while retaining the upstream checker.
+    return EchelonBrand::kReleaseApiUrl;
 #else
     return "https://api.github.com/repos/fbraz3/GeneralsX/releases/latest";
 #endif
@@ -168,8 +168,8 @@ static int SDLCALL threadFunc(void* /*userData*/)
     }
 
     curl_easy_setopt(curl, CURLOPT_URL, UpdateChecker::getReleasesUrl());
-#ifdef GENERALS_ARSENAL_BRAND
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, GeneralsArsenalBrand::kUpdateUserAgent);
+#ifdef ECHELON_BRAND
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, EchelonBrand::kUpdateUserAgent);
 #else
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "GeneralsX/update-checker");
 #endif
@@ -301,8 +301,8 @@ void UpdateChecker::start()
     // provide either an exact tag OR a valid commit timestamp (tag may be empty in
     // some packaged CI contexts even when the binary is a real release artifact).
     // Set the product-specific environment variable to bypass release guards for testing.
-#ifdef GENERALS_ARSENAL_BRAND
-    const bool forceCheck = SDL_getenv("GENERALS_ARSENAL_FORCE_UPDATE_CHECK") != nullptr;
+#ifdef ECHELON_BRAND
+    const bool forceCheck = SDL_getenv("ECHELON_FORCE_UPDATE_CHECK") != nullptr;
 #else
     const bool forceCheck = SDL_getenv("GENERALS_FORCE_UPDATE_CHECK") != nullptr;
 #endif

@@ -1,0 +1,28 @@
+/*
+** Command & Conquer Generals(tm)
+** Copyright 2025 Electronic Arts Inc.
+**
+** This program is free software: you can redistribute it and/or modify
+** it under the terms of the GNU General Public License as published by
+** the Free Software Foundation, either version 3 of the License, or
+** (at your option) any later version.
+*/
+
+#pragma once
+
+// Echelon @feature Codex 12/08/2026 Central public brand identity for fork-owned C++ code.
+namespace EchelonBrand
+{
+inline constexpr const char *kProductName = "@ECHELON_PRODUCT_NAME@";
+inline constexpr const wchar_t *kProductNameWide = L"@ECHELON_PRODUCT_NAME@";
+inline constexpr const char *kProductSlug = "@ECHELON_PRODUCT_SLUG@";
+inline constexpr const char *kDataDirectory = "@ECHELON_DATA_DIRECTORY@";
+inline constexpr const char *kInstallDataDirectory = "@ECHELON_INSTALL_SLUG@";
+inline constexpr const char *kModuleExport = "@ECHELON_MODULE_EXPORT@";
+inline constexpr const char *kReleaseApiUrl = "@ECHELON_RELEASE_API_URL@";
+inline constexpr const char *kReleasesUrl = "@ECHELON_RELEASES_URL@";
+inline constexpr const char *kUpdateUserAgent = "@ECHELON_UPDATE_USER_AGENT@";
+inline constexpr const char *kReleaseTagPrefix = "@ECHELON_RELEASE_TAG_PREFIX@";
+inline constexpr const char *kReleaseTagPrefixLower = "@ECHELON_RELEASE_TAG_PREFIX_LOWER@";
+inline constexpr const char *kProjectWatermark = "@ECHELON_PROJECT_WATERMARK@";
+} // namespace EchelonBrand

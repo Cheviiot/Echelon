@@ -29,7 +29,7 @@
 #include "Common/AsciiString.h"
 #include "Common/GameMemory.h"
 #include "Common/PerfTimer.h"
-#include "GeneralsArsenalLauncher/ContentLayerRuntime.h"
+#include "LauncherIntegration/ContentLayerRuntime.h"
 #include "StdDevice/Common/StdLocalFileSystem.h"
 #include "StdDevice/Common/StdLocalFile.h"
 
@@ -64,10 +64,10 @@ static std::filesystem::path fixFilenameFromWindowsPath(const Char *filename, In
 	// Convert the filename to a std::filesystem::path and pass that
 	std::filesystem::path path(std::move(fixedFilename));
 
-	// GeneralsArsenal @feature Codex 14/08/2026 Resolve managed loose files from the highest immutable VFS layer first.
+	// Echelon @feature Codex 14/08/2026 Resolve managed loose files from the highest immutable VFS layer first.
 	if (!(access & File::WRITE) && path.is_relative()) {
 		std::filesystem::path layeredPath;
-		if (GeneralsArsenalContentRuntime::ResolveReadPath(filename, layeredPath)) return layeredPath;
+		if (EchelonContentRuntime::ResolveReadPath(filename, layeredPath)) return layeredPath;
 	}
 
 #ifndef _WIN32
@@ -287,9 +287,9 @@ Bool StdLocalFileSystem::doesFileExist(const Char *filename) const
 
 void StdLocalFileSystem::getFileListInDirectory(const AsciiString& currentDirectory, const AsciiString& originalDirectory, const AsciiString& searchName, FilenameList & filenameList, Bool searchSubdirectories) const
 {
-	// GeneralsArsenal @feature Codex 14/08/2026 Add each logical loose file once, using the highest content layer.
+	// Echelon @feature Codex 14/08/2026 Add each logical loose file once, using the highest content layer.
 	if (currentDirectory.isEmpty() && std::filesystem::path(originalDirectory.str()).is_relative()) {
-		for (const std::filesystem::path &layeredFile : GeneralsArsenalContentRuntime::ListFiles(
+		for (const std::filesystem::path &layeredFile : EchelonContentRuntime::ListFiles(
 			originalDirectory.str(), searchName.str(), searchSubdirectories != FALSE)) {
 			filenameList.insert(AsciiString(layeredFile.string().c_str()));
 		}
@@ -330,7 +330,7 @@ void StdLocalFileSystem::getFileListInDirectory(const AsciiString& currentDirect
 			logicalFilename.concat(currentDirectory);
 			logicalFilename.concat(filenameStr.c_str());
 			std::filesystem::path layeredPath;
-			if (GeneralsArsenalContentRuntime::ResolveReadPath(logicalFilename.str(), layeredPath)) {
+			if (EchelonContentRuntime::ResolveReadPath(logicalFilename.str(), layeredPath)) {
 				iter++;
 				done = iter == std::filesystem::directory_iterator();
 				continue;

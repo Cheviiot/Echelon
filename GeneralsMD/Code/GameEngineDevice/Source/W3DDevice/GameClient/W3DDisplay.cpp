@@ -591,7 +591,7 @@ static void SDL3_ApplyWindowModeForRenderConfig(Bool windowed, Int renderWidth, 
 {
 	extern SDL_Window* TheSDL3Window;
 	if (!TheSDL3Window) return;
-	// GeneralsArsenal @feature Codex 14/08/2026 Hosted sessions request presentation changes from the launcher instead of mutating its SDL window directly.
+	// Echelon @feature Codex 14/08/2026 Hosted sessions request presentation changes from the launcher instead of mutating its SDL window directly.
 	if (DX8Wrapper::Is_Window_Geometry_Externally_Owned()) {
 		if (!DX8Wrapper::Request_Externally_Owned_Window_Mode(windowed, renderWidth, renderHeight)) {
 			fprintf(stderr, "WARNING: Launcher rejected hosted Zero Hour window mode %s %dx%d\n",
@@ -725,7 +725,7 @@ Bool W3DDisplay::setDisplayMode( UnsignedInt xres, UnsignedInt yres, UnsignedInt
 	const UnsignedInt oldBitDepth = getBitDepth();
 	const Bool oldWindowed = getWindowed();
 	#ifdef SAGE_USE_SDL3
-	// GeneralsArsenal @bugfix Codex 14/08/2026 Resize the host-owned presentation before DXVK rebuilds its swapchain.
+	// Echelon @bugfix Codex 14/08/2026 Resize the host-owned presentation before DXVK rebuilds its swapchain.
 	if (DX8Wrapper::Is_Window_Geometry_Externally_Owned()) {
 		SDL3_ApplyWindowModeForRenderConfig(windowed, xres, yres);
 	}

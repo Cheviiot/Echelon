@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout Arsenal history
+      - name: Checkout Echelon history
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -33,7 +33,7 @@ jobs:
           {
             echo "## GeneralsX upstream status"
             echo ""
-            echo "- Arsenal main: \`${LOCAL_SHA}\`"
+            echo "- Echelon main: \`${LOCAL_SHA}\`"
             echo "- GeneralsX main: \`${UPSTREAM_SHA}\`"
             echo "- New upstream commits: **${COUNT}**"
             echo ""
@@ -50,8 +50,8 @@ jobs:
               echo ""
               echo "Create a reviewed \`generalsx-sync-MM-DD-YYYY\` branch; this workflow never merges or pushes."
             else
-              echo "Arsenal already contains the current GeneralsX main history."
+              echo "Echelon already contains the current GeneralsX main history."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-          echo "GeneralsX upstream has ${COUNT} commit(s) not present in Arsenal main."
+          echo "GeneralsX upstream has ${COUNT} commit(s) not present in Echelon main."

@@ -2,7 +2,7 @@
 # GeneralsX @build GitHubCopilot 13/04/2026 Build Flatpak bundles by compiling inside org.freedesktop.Sdk.
 # Usage:
 #   ./scripts/build/linux/build-linux-flatpak.sh [preset] [product]
-#   product: Arsenal (default)
+#   product: Echelon (default)
 set -euo pipefail
 
 # GeneralsX @build GitHubCopilot 14/04/2026 Timestamp helper for progress tracking.
@@ -16,7 +16,7 @@ elapsed() {
 }
 
 PRESET="${1:-linux64-deploy}"
-PRODUCT="${2:-Arsenal}"
+PRODUCT="${2:-Echelon}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 FLATPAK_DIR="${PROJECT_ROOT}/flatpak"
@@ -25,26 +25,26 @@ FLATPAK_REPO_DIR="${PROJECT_ROOT}/build/flatpak-repo"
 FLATPAK_STATE_DIR="${PROJECT_ROOT}/.flatpak-builder"
 RUNTIME_REPO_URL="${RUNTIME_REPO_URL:-https://flathub.org/repo/flathub.flatpakrepo}"
 # GeneralsX @build GitHubCopilot 13/04/2026 Optional hard purge for troubleshooting (drops flatpak-builder cache + workdirs).
-GENERALS_ARSENAL_FLATPAK_PURGE_CACHE="${GENERALS_ARSENAL_FLATPAK_PURGE_CACHE:-0}"
+ECHELON_FLATPAK_PURGE_CACHE="${ECHELON_FLATPAK_PURGE_CACHE:-0}"
 # GeneralsX @build GitHubCopilot 14/04/2026 Enable flatpak-builder ccache by default for cross-session object reuse.
-GENERALS_ARSENAL_FLATPAK_USE_CCACHE="${GENERALS_ARSENAL_FLATPAK_USE_CCACHE:-1}"
-# GeneralsArsenal @build Codex 13/08/2026 Permit reproducible rebuilds from the populated source cache during network outages.
-GENERALS_ARSENAL_FLATPAK_OFFLINE="${GENERALS_ARSENAL_FLATPAK_OFFLINE:-0}"
+ECHELON_FLATPAK_USE_CCACHE="${ECHELON_FLATPAK_USE_CCACHE:-1}"
+# Echelon @build Codex 13/08/2026 Permit reproducible rebuilds from the populated source cache during network outages.
+ECHELON_FLATPAK_OFFLINE="${ECHELON_FLATPAK_OFFLINE:-0}"
 
 case "${PRODUCT}" in
-    Arsenal)
-        MANIFEST="${FLATPAK_DIR}/io.github.cheviiot.GeneralsArsenal.yml"
-        APP_ID="io.github.cheviiot.GeneralsArsenal"
-        OUTPUT_BUNDLE="${PROJECT_ROOT}/build/GeneralsArsenal-${PRESET}.flatpak"
+    Echelon)
+        MANIFEST="${FLATPAK_DIR}/io.github.cheviiot.Echelon.yml"
+        APP_ID="io.github.cheviiot.Echelon"
+        OUTPUT_BUNDLE="${PROJECT_ROOT}/build/Echelon-${PRESET}.flatpak"
         ;;
     *)
-        echo "ERROR: Unsupported product '${PRODUCT}'. Use Arsenal." >&2
+        echo "ERROR: Unsupported product '${PRODUCT}'. Use Echelon." >&2
         exit 1
         ;;
 esac
 
 BUILD_START=$(date +%s)
-echo "[$(ts)] Building Generals: Arsenal Flatpak (preset label: ${PRESET})"
+echo "[$(ts)] Building Echelon Flatpak (preset label: ${PRESET})"
 
 if [[ ! -f "${MANIFEST}" ]]; then
     echo "ERROR: Missing Flatpak manifest ${MANIFEST}" >&2
@@ -52,12 +52,12 @@ if [[ ! -f "${MANIFEST}" ]]; then
 fi
 if ! command -v flatpak-builder >/dev/null 2>&1; then
     echo "ERROR: flatpak-builder is not installed." >&2
-    echo "Install with: sudo apt-get install flatpak flatpak-builder" >&2
+    echo "Install flatpak-builder inside the project Distrobox." >&2
     exit 1
 fi
 if ! command -v flatpak >/dev/null 2>&1; then
     echo "ERROR: flatpak is not installed." >&2
-    echo "Install with: sudo apt-get install flatpak" >&2
+    echo "Install Flatpak using the host OS integration package manager." >&2
     exit 1
 fi
 
@@ -72,8 +72,8 @@ if ! flatpak --user info org.freedesktop.Platform//25.08 >/dev/null 2>&1 || \
     flatpak --user install -y flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08
 fi
 
-if [[ "${GENERALS_ARSENAL_FLATPAK_PURGE_CACHE}" == "1" ]]; then
-    echo "[$(ts)] Full purge requested (GENERALS_ARSENAL_FLATPAK_PURGE_CACHE=1): removing Flatpak build dirs and local flatpak-builder cache..."
+if [[ "${ECHELON_FLATPAK_PURGE_CACHE}" == "1" ]]; then
+    echo "[$(ts)] Full purge requested (ECHELON_FLATPAK_PURGE_CACHE=1): removing Flatpak build dirs and local flatpak-builder cache..."
     rm -rf "${FLATPAK_BUILD_DIR}" "${FLATPAK_REPO_DIR}"
     rm -rf "${FLATPAK_STATE_DIR}"
 fi
@@ -91,7 +91,7 @@ BUILDER_ARGS=(
     --install-deps-from=flathub
 )
 
-if [[ "${GENERALS_ARSENAL_FLATPAK_OFFLINE}" == "1" ]]; then
+if [[ "${ECHELON_FLATPAK_OFFLINE}" == "1" ]]; then
     BUILDER_ARGS+=(--disable-download)
     echo "[$(ts)] Flatpak source downloads disabled; using the populated local cache."
 fi
@@ -105,15 +105,15 @@ else
     rm -f "${PROJECT_ROOT}/.git-override.cmake"
 fi
 
-if [[ "${GENERALS_ARSENAL_FLATPAK_USE_CCACHE}" == "1" ]]; then
+if [[ "${ECHELON_FLATPAK_USE_CCACHE}" == "1" ]]; then
     BUILDER_ARGS+=(--ccache)
-    echo "[$(ts)] flatpak-builder ccache enabled (GENERALS_ARSENAL_FLATPAK_USE_CCACHE=1)."
+    echo "[$(ts)] flatpak-builder ccache enabled (ECHELON_FLATPAK_USE_CCACHE=1)."
 else
-    echo "[$(ts)] flatpak-builder ccache disabled (GENERALS_ARSENAL_FLATPAK_USE_CCACHE=0)."
+    echo "[$(ts)] flatpak-builder ccache disabled (ECHELON_FLATPAK_USE_CCACHE=0)."
 fi
 
 echo "Using flatpak-builder state/cache dir: ${FLATPAK_STATE_DIR}"
-echo "Set GENERALS_ARSENAL_FLATPAK_PURGE_CACHE=1 for full purge."
+echo "Set ECHELON_FLATPAK_PURGE_CACHE=1 for full purge."
 echo "Note: flatpak-builder can stay quiet for a while during finalization/export."
 echo "Do not interrupt after the last module command unless an explicit error is shown."
 

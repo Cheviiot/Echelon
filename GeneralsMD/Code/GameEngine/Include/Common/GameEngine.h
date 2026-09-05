@@ -119,5 +119,5 @@ extern GameEngine *CreateGameEngine();
 /// The entry point for the game system
 extern Int GameMain();
 
-// GeneralsArsenal @feature Codex 13/08/2026 Verify that a launcher session released every engine-owned singleton.
-extern Bool GeneralsArsenalAreEngineSubsystemSingletonsReleased();
+// Echelon @feature Codex 13/08/2026 Verify that a launcher session released every engine-owned singleton.
+extern Bool EchelonAreEngineSubsystemSingletonsReleased();

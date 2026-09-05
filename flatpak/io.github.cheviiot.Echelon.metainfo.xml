@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.cheviiot.Echelon</id>
+  <name>Echelon</name>
+  <summary>One launcher for Generals, Zero Hour, and future community extensions</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <description>
+    <p>
+      Echelon is an open-source fork of GeneralsX that combines the
+      Generals and Zero Hour engine branches behind one SDL3 launcher and one window.
+    </p>
+    <p>
+      The package contains both open-source engine modules and no retail game assets.
+      Users provide their legally obtained game data, which is stored under
+      ~/.Echelon.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.cheviiot.Echelon.desktop</launchable>
+  <url type="homepage">https://github.com/Cheviiot/Echelon</url>
+  <url type="vcs-browser">https://github.com/Cheviiot/Echelon</url>
+  <project_license>GPL-2.0-or-later</project_license>
+</component>

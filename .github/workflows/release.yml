@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: "Release version tag (e.g., GeneralsArsenal-Beta-1)"
+        description: "Release version tag (e.g., Echelon-Beta-1)"
         required: true
         type: string
       release_mode:
@@ -142,7 +142,7 @@ jobs:
         run: |
           CURRENT_TAG="${{ inputs.release_version }}"
           # GeneralsX @bugfix GitHubCopilot 21/04/2026 Exclude the in-flight release tag so changelog compares against the previous published release.
-          LATEST_TAG=$(git tag -l "GeneralsArsenal*" --sort=-version:refname --merged HEAD | grep -Fxv "$CURRENT_TAG" | head -1)
+          LATEST_TAG=$(git tag -l "Echelon*" --sort=-version:refname --merged HEAD | grep -Fxv "$CURRENT_TAG" | head -1)
           if [ -z "$LATEST_TAG" ]; then
             echo "latest_tag=" >> "$GITHUB_OUTPUT"
             echo "latest_tag_date=" >> "$GITHUB_OUTPUT"
@@ -157,8 +157,14 @@ jobs:
       - name: Download unified Linux Flatpak artifact
         uses: actions/download-artifact@v8
         with:
-          name: linux-flatpak-generals-arsenal-linux64-deploy
+          name: linux-flatpak-echelon-linux64-deploy
           path: artifacts/linux-flatpak
+
+      - name: Download unified macOS application artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: macos-echelon-app
+          path: artifacts/macos-echelon
 
       - name: Normalize bundle files for release assets
         id: assets
@@ -181,9 +187,11 @@ jobs:
           fi
 
           # GeneralsX @build GitHubCopilot 14/04/2026 Linux release now ships native Flatpak bundles instead of zip wrappers.
-          cp "$LINUX_FLATPAK" release-assets/GeneralsArsenal-linux.flatpak
+          cp "$LINUX_FLATPAK" release-assets/Echelon-linux.flatpak
 
-          echo "linux_asset=$GITHUB_WORKSPACE/release-assets/GeneralsArsenal-linux.flatpak" >> "$GITHUB_OUTPUT"
+          echo "linux_asset=$GITHUB_WORKSPACE/release-assets/Echelon-linux.flatpak" >> "$GITHUB_OUTPUT"
+          cp artifacts/macos-echelon/Echelon-macos-arm64.zip release-assets/Echelon-macos-arm64.zip
+          echo "macos_asset=$GITHUB_WORKSPACE/release-assets/Echelon-macos-arm64.zip" >> "$GITHUB_OUTPUT"
 
       - name: Build changelog from local PRs only
         id: changelog
@@ -243,7 +251,7 @@ jobs:
           mkdir -p release-assets
 
           {
-            echo "> This is a **beta** release. Some bugs are still expected. If you run into any problems, please [open an issue](https://github.com/Cheviiot/GeneralsArsenal/issues) so we can investigate."
+            echo "> This is a **beta** release. Some bugs are still expected. If you run into any problems, please [open an issue](https://github.com/Cheviiot/Echelon/issues) so we can investigate."
             echo ""
             if [ "${{ inputs.release_mode }}" = "Draft" ]; then
               echo "# What's New"
@@ -253,11 +261,11 @@ jobs:
             fi
             echo "# Getting Started"
             echo ""
-            echo "**Install the engine:** Follow the [Installation Guide](https://github.com/Cheviiot/GeneralsArsenal/blob/main/docs/HOWTO/INSTALLATION.md) to set up Generals: Arsenal on your platform."
+            echo "**Install the engine:** Follow the [Installation Guide](https://github.com/Cheviiot/Echelon/blob/main/docs/HOWTO/INSTALLATION.md) to set up Echelon on your platform."
             echo ""
             echo "## GeneralsX lineage and community ports"
             echo ""
-            echo "Generals: Arsenal is a GeneralsX fork. Please also take a look at the upstream and related ports."
+            echo "Echelon is a GeneralsX fork. Please also take a look at the upstream and related ports."
             echo ""
             echo "* [GeneralsX](https://github.com/fbraz3/GeneralsX) - upstream cross-platform port"
             echo "* [Generals-Mac-iOS-iPad](https://github.com/ammaarreshi/Generals-Mac-iOS-iPad) - iOS port by [ammaarreshi](https://github.com/ammaarreshi)"
@@ -268,7 +276,7 @@ jobs:
             cat "$PR_LINES_FILE"
             echo ""
             if [ -n "$LATEST_TAG" ]; then
-              echo "**Full Changelog**: https://github.com/Cheviiot/GeneralsArsenal/compare/${LATEST_TAG}...${CURRENT_TAG}"
+              echo "**Full Changelog**: https://github.com/Cheviiot/Echelon/compare/${LATEST_TAG}...${CURRENT_TAG}"
             fi
           } > "$NOTES_FILE"
 
@@ -298,9 +306,10 @@ jobs:
 
           gh release create "${{ inputs.release_version }}" \
             $DRAFT_FLAG \
-            --title "Generals: Arsenal - ${{ inputs.release_version }}" \
+            --title "Echelon - ${{ inputs.release_version }}" \
             --notes-file "${{ steps.notes.outputs.notes_file }}" \
-            "${{ steps.assets.outputs.linux_asset }}"
+            "${{ steps.assets.outputs.linux_asset }}" \
+            "${{ steps.assets.outputs.macos_asset }}"
 
       - name: Summary
         run: |
@@ -308,8 +317,8 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Tag: ${{ inputs.release_version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Mode: ${{ inputs.release_mode }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Linux universal asset: GeneralsArsenal-linux.flatpak" >> "$GITHUB_STEP_SUMMARY"
-          echo "- macOS engine builds: validation only until the unified Arsenal app bundle is ready" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Linux universal asset: Echelon-linux.flatpak" >> "$GITHUB_STEP_SUMMARY"
+          echo "- macOS universal asset: Echelon-macos-arm64.zip" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
           if [ "${{ inputs.release_mode }}" = "Dry Run" ]; then

@@ -468,7 +468,7 @@ UnsignedInt INI::load( AsciiString filename, INILoadType loadType, Xfer *pXfer )
 		fprintf(stderr, "[INI] load - processed total %d lines\n", lineCount);
 		fflush(stderr);
 	}
-	// GeneralsArsenal @bugfix Codex 15/08/2026 Preserve the actionable parser line in release logs for mod compatibility failures.
+	// Echelon @bugfix Codex 15/08/2026 Preserve the actionable parser line in release logs for mod compatibility failures.
 	catch (const INIException &exception)
 	{
 		fprintf(stderr, "[INI] ERROR in load('%s'): %s", filename.str(),
@@ -1724,7 +1724,7 @@ Type scanType(std::string_view token)
 	Int64 value = 0;
 	const auto [ptr, ec] = std::from_chars(tokenView.data(), tokenView.data() + tokenView.size(), value);
 	if (ec == std::errc::result_out_of_range) {
-		// GeneralsArsenal @bugfix Codex 15/08/2026 Preserve Windows mod semantics for intentionally oversized integer sentinels.
+		// Echelon @bugfix Codex 15/08/2026 Preserve Windows mod semantics for intentionally oversized integer sentinels.
 		return !tokenView.empty() && tokenView[0] == '-' ?
 			std::numeric_limits<Int>::min() : std::numeric_limits<Int>::max();
 	}
@@ -1769,7 +1769,7 @@ Type scanType(std::string_view token)
 	const auto [ptr, ec] = std::from_chars(tokenView.data(), tokenView.data() + tokenView.size(), value);
 	if (ec == std::errc::result_out_of_range)
 	{
-		// GeneralsArsenal @bugfix Codex 15/08/2026 Preserve retail mod compatibility for oversized unsigned INI literals.
+		// Echelon @bugfix Codex 15/08/2026 Preserve retail mod compatibility for oversized unsigned INI literals.
 		return std::numeric_limits<UnsignedInt>::max();
 	}
 	if (ec != std::errc{})

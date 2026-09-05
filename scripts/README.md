@@ -62,13 +62,13 @@ Utilities for large-scale code refactoring and fixes:
 - `docker-smoke-test-zh.sh` - Quick startup validation (expects crash, checks init output)
 - `run-bundled-game.sh` - Test bundled binary after deployment
 - `collect-flatpak-vulkan-wsi-report.sh` - Collect reproducible Flatpak Vulkan/XCB diagnostics for upstream runtime issues
-- `test-generals-arsenal-quickstart-wayland.sh` - Prove in a private Wayland compositor that quick start skips intro movies while both engines still load their live shell maps
-- `test-generals-arsenal-lifecycle-wayland.sh` - Exercise repeated native launcher/engine handoffs without using the host display
-- `test-generals-arsenal-flatpak-wayland.sh` - Exercise the installed Flatpak, window restoration, and Wayland explicit-sync lifetime in isolation
-- `test-generals-arsenal-content-stack.sh` - Verify ordered mod, patch, and addon overlays, root BIG mounting, integrity rejection, and teardown in both engines
-- `test-generals-arsenal-mod-manager-wayland.sh` - Render installed versions, cached updates, patches, ordered add-ons, and modal folder/link actions in a private headless Wayland compositor
-- `test-generals-arsenal-repository-wayland.sh` - Wait for the installed launcher's live catalog refresh, validate the cached `RepositoryCatalogV1`, and capture it in a private headless Wayland compositor
-- `test-generals-arsenal-download-resume.sh` - Exercise Range resume, ETag changes, and ignored-Range rejection against a private TLS fixture server
+- `test-echelon-quickstart-wayland.sh` - Prove in a private Wayland compositor that quick start skips intro movies while both engines still load their live shell maps
+- `test-echelon-lifecycle-wayland.sh` - Exercise repeated native launcher/engine handoffs without using the host display
+- `test-echelon-flatpak-wayland.sh` - Exercise the installed Flatpak, window restoration, and Wayland explicit-sync lifetime in isolation
+- `test-echelon-content-stack.sh` - Verify ordered mod, patch, and addon overlays, root BIG mounting, integrity rejection, and teardown in both engines
+- `test-echelon-mod-manager-wayland.sh` - Render installed versions, cached updates, patches, ordered add-ons, and modal folder/link actions in a private headless Wayland compositor
+- `test-echelon-repository-wayland.sh` - Wait for the installed launcher's live catalog refresh, validate the cached `RepositoryCatalogV1`, and capture it in a private headless Wayland compositor
+- `test-echelon-download-resume.sh` - Exercise Range resume, ETag changes, and ignored-Range rejection against a private TLS fixture server
 
 ### `legacy/` - Deprecated & Compatibility
 

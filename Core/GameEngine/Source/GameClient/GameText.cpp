@@ -856,7 +856,7 @@ void GameTextManager::translateCopy( WideChar *outbuf, Char *inbuf )
 		}
 		else if( *inbuf != '\\' )
 		{
-			// GeneralsArsenal @feature Codex 15/08/2026 Decode UTF-8 STR files while retaining byte-compatible legacy text.
+			// Echelon @feature Codex 15/08/2026 Decode UTF-8 STR files while retaining byte-compatible legacy text.
 			const unsigned char lead = static_cast<unsigned char>(*inbuf);
 			uint32_t codePoint = lead;
 			Int continuationCount = 0;

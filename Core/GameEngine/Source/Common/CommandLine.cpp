@@ -835,7 +835,7 @@ Int parseWinCursors(char *args[], int num)
 
 Int parseQuickStart( char *args[], int num )
 {
-	// GeneralsArsenal @tweak Codex 14/08/2026 Keep the live shell map independent from fast startup.
+	// Echelon @tweak Codex 14/08/2026 Keep the live shell map independent from fast startup.
 	parseNoLogo( args, num );
 	parseNoWindowAnimation( args, num );
 	return 1;

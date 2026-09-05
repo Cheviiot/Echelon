@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Generals: Arsenal is maintained as a small branding, launcher, and packaging overlay on top of [fbraz3/GeneralsX](https://github.com/fbraz3/GeneralsX). Updates are merged through dated review branches. Never replace the repository with a source archive, rebase published Arsenal history, or apply blanket `ours`/`theirs` conflict resolution.
+Echelon is maintained as a small branding, launcher, and packaging overlay on top of [fbraz3/GeneralsX](https://github.com/fbraz3/GeneralsX). Updates are merged through dated review branches. Never replace the repository with a source archive, rebase published Echelon history, or apply blanket `ours`/`theirs` conflict resolution.
 
 ## One-time repository setup
 
@@ -18,7 +18,7 @@ git config rerere.autoupdate true
 Expected remotes:
 
 ```text
-origin    https://github.com/Cheviiot/GeneralsArsenal.git
+origin    https://github.com/Cheviiot/Echelon.git
 upstream  https://github.com/fbraz3/GeneralsX.git
 ```
 
@@ -42,11 +42,11 @@ Replace `MM-DD-YYYY` with the merge date. Record the upstream head SHA, commit c
 
 Resolve each conflict from its intent:
 
-- Accept upstream engine, gameplay, common-library, platform, determinism, and safety fixes unless there is a documented Arsenal incompatibility.
-- Preserve the Arsenal launcher, `GeneralsArsenal` public executable, private Arsenal ABI, `.GeneralsArsenal` data root, application ID, logo, and packaging.
-- If upstream changes its own launcher or packaging, port the functional change into the Arsenal layer without restoring GeneralsX public identifiers.
+- Accept upstream engine, gameplay, common-library, platform, determinism, and safety fixes unless there is a documented Echelon incompatibility.
+- Preserve the Echelon launcher, `Echelon` public executable, private Echelon ABI, `.Echelon` data root, application ID, logo, and packaging.
+- If upstream changes its own launcher or packaging, port the functional change into the Echelon layer without restoring GeneralsX public identifiers.
 - Keep `Generals/`, `GeneralsMD/`, `Core/`, `g_generals`, and `z_generals` aligned with upstream names.
-- Preserve historical `GeneralsX @...` annotations and attribution. Use `GeneralsArsenal @...` only for new fork-owned changes.
+- Preserve historical `GeneralsX @...` annotations and attribution. Use `Echelon @...` only for new fork-owned changes.
 - Never edit generated dependency trees under `build/_deps`.
 
 The highest-risk files are the root CMake configuration, engine entry points, SDL/DXVK window ownership, audio teardown, global memory managers, Flatpak manifests, and launcher return hooks in both game branches.
@@ -62,27 +62,27 @@ git status --short
 
 ## Required validation
 
-Build inside the `dev-ubuntu` Distrobox environment:
+Build inside the `ubuntu-dev` Distrobox environment:
 
 ```bash
 project_root="$(pwd -P)"
 export VCPKG_ROOT="${VCPKG_ROOT:-$HOME/.generalsx/vcpkg}"
-distrobox enter dev-ubuntu -- bash -lc '
+distrobox enter ubuntu-dev -- bash -lc '
   cd "$1" &&
   cmake --fresh --preset linux64-deploy -DRTS_BUILD_UNIVERSAL_LAUNCHER=ON &&
-  cmake --build build/linux64-deploy --target generals_arsenal_launcher g_generals z_generals -j4
+  cmake --build build/linux64-deploy --target echelon_launcher g_generals z_generals -j4
 ' bash "$project_root"
 ```
 
 Then verify:
 
-1. Both engine modules export only `GeneralsArsenal_GetEngineModuleV2`.
-2. Generals and Zero Hour start, return to Arsenal, and can be alternated ten times.
+1. Both engine modules export only `Echelon_GetEngineModuleV2`.
+2. Generals and Zero Hour start, return to Echelon, and can be alternated ten times.
 3. Normal game exit terminates the process.
 4. Linux replay/CRC tests still pass for retail replays.
 5. Headless runs bypass the selector.
-6. A clean HOME creates only `.GeneralsArsenal`; old paths remain untouched.
-7. The unified Flatpak builds and runs as `io.github.cheviiot.GeneralsArsenal`.
+6. A clean HOME creates only `.Echelon`; old paths remain untouched.
+7. The unified Flatpak builds and runs as `io.github.cheviiot.Echelon`.
 8. RU/EN, 4:3, 16:9, 16:10, HiDPI, windowed, and fullscreen layouts remain usable.
 
 ## Pull request report

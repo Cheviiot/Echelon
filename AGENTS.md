@@ -1,7 +1,7 @@
-# Generals: Arsenal — Instructions for AI Coding Agents
+# Echelon — Instructions for AI Coding Agents
 
 ## What I Am
-Generals: Arsenal is a fork of GeneralsX that combines the Command & Conquer: Generals and Zero Hour engine branches behind one launcher for **Linux and macOS**. It preserves the GeneralsX cross-platform stack (SDL3 + DXVK + OpenAL + 64-bit) and keeps the shared engine structure close to upstream for regular reviewed merges.
+Echelon is a fork of GeneralsX that combines the Command & Conquer: Generals and Zero Hour engine branches behind one launcher for **Linux and macOS**. It preserves the GeneralsX cross-platform stack (SDL3 + DXVK + OpenAL + 64-bit) and keeps the shared engine structure close to upstream for regular reviewed merges.
 
 ## Key Entry Points
 - `GeneralsMD/Code/Main/WinMain.cpp`
@@ -29,7 +29,7 @@ Generals: Arsenal is a fork of GeneralsX that combines the Command & Conquer: Ge
 2. **SDL3 everywhere** – No native platform calls in game code
 3. **DXVK everywhere** – DX8 → Vulkan translation on all platforms
 4. **OpenAL / MiniAudio Parity** – Cross-platform audio stack. Implementations and bug fixes in one MUST be replicated in the other to maintain strict feature parity.
-5. **64-bit native** – x86_64 only (32-bit via VC6 upstream)
+5. **64-bit native** – Linux x86_64 and macOS ARM64 (32-bit VC6 is upstream reference only)
 6. **Retail compatibility** – Original replays and mods must work
 7. **Determinism** – Rendering/audio changes must not affect gameplay logic
 8. **No band-aids** – Fix underlying issues, not symptoms
@@ -172,20 +172,19 @@ mkdir -p logs && gdb -batch -ex "run -win" -ex "bt full" -ex "thread apply all b
 ```
 
 ## Branching & Sync
-### TheSuperHackers upstream sync
-```bash
-git remote add thesuperhackers git@github.com:TheSuperHackers/GeneralsGameCode.git
-git fetch thesuperhackers
-git merge thesuperhackers/main
-```
+### GeneralsX upstream sync
 
-**Conflict resolution**:
-- Platform code (`Core/GameEngineDevice/`): keep ours
-- Game logic (`GeneralsMD/Code/GameEngine/`): keep theirs
-- Build system: merge carefully, test both versions
+The active product upstream is `fbraz3/GeneralsX` (`upstream`). Preserve history and integrate pinned commits on a `codex/` review branch. Follow [the sync guide](docs/HOWTO/SYNC_GENERALSX_UPSTREAM.md) and [ownership map](docs/WORKDIR/reports/ECHELON_FOUNDATION.md).
+
+- Review conflicts by behavior; do not apply directory-wide ours/theirs rules.
+- Keep the shared engine layout close to upstream. Product code lives in `Launcher/`, the narrow host bridge in `Core/GameEngineDevice/{Include,Source}/LauncherIntegration/`.
+- Validate hosted and standalone builds for both games. Only hosted variants receive `ECHELON_BRAND`, `ECHELON_ENGINE_HOSTED`, and `ECHELON_ENGINE_MODULE_ALLOCATOR`.
+- The mod catalog service was retired by the owner. Do not recreate it or wire a replacement URL. Preserve local imports and isolated transport fixtures.
+- Product identity is Echelon, application ID `io.github.cheviiot.Echelon`, data root `$HOME/.Echelon`. Do not migrate or discover old app roots automatically.
+- TheSuperHackers remains a reference baseline; its changes normally arrive through GeneralsX.
 
 ## Code Conventions
-- **Annotate new fork changes**: `// GeneralsArsenal @keyword author DD/MM/YYYY Description`. Preserve historical `// GeneralsX @keyword ...` annotations.
+- **Annotate new fork changes**: `// Echelon @keyword author DD/MM/YYYY Description`. Preserve historical `// GeneralsX @keyword ...` annotations.
 - **Keywords**: `@bugfix` / `@feature` / `@performance` / `@refactor` / `@tweak` / `@build`
 - **Attribution**: Add upstream PR references with author and GitHub URL
 - **English only**: All code, comments, documentation

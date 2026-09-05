@@ -16,7 +16,7 @@ Common command line parameters for `GeneralsX` (Generals) and `GeneralsXZH` (Zer
 | Parameter | Description | Example |
 |-----------|-------------|---------|
 | `-noshellmap` | Disables the animated shell-map background | `./GeneralsXZH -noshellmap` |
-| `-quickstart` | Quick launch in both games: skips startup movies, logos, and window animations while retaining the live shell map | `GeneralsArsenal --profile=generals -quickstart` |
+| `-quickstart` | Quick launch in both games: skips startup movies, logos, and window animations while retaining the live shell map | `Echelon --profile=generals -quickstart` |
 | `-debug` | Enable debug mode | `./GeneralsXZH -debug` |
 | `-logToCon` | Enables legacy debug-log console routing (`DEBUG_LOG`). **Debug builds only** (`ALLOW_DEBUG_UTILS` / `RTS_BUILD_OPTION_DEBUG=ON`); ignored in release builds. | `./GeneralsXZH -logToCon` |
 
@@ -45,7 +45,7 @@ Launch in windowed mode, skip intro.
 To reproduce the older static-background quick start, combine both independent switches:
 
 ```bash
-GeneralsArsenal --profile=generals -quickstart -noshellmap
+Echelon --profile=generals -quickstart -noshellmap
 ```
 
 ### Replay Compatibility Testing

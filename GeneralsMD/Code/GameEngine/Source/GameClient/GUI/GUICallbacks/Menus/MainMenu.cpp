@@ -77,7 +77,7 @@
 
 #if defined(SAGE_USE_SDL3) && !defined(_WIN32)
 #include "GameClient/GadgetPushButton.h"
-#include "GeneralsArsenalLauncher/EngineModuleAPI.h"
+#include "LauncherIntegration/EngineModuleAPI.h"
 #include <cstdlib>
 #include <cstring>
 #endif
@@ -86,8 +86,8 @@
 #ifdef SAGE_UPDATE_CHECK
 #include "Common/UpdateChecker.h"
 #include "GameClient/GadgetPushButton.h"
-#ifdef GENERALS_ARSENAL_BRAND
-#include "GeneralsArsenalLauncher/BrandIdentity.h"
+#ifdef ECHELON_BRAND
+#include "LauncherIntegration/BrandIdentity.h"
 #endif
 #include <SDL3/SDL.h>
 #endif
@@ -536,7 +536,7 @@ static void removeLauncherReturnButton()
 // GeneralsX @feature Codex 11/08/2026 Extend the retail default-menu container with a native seventh row.
 static void initLauncherReturnButton()
 {
-	if (!GeneralsArsenalIsLauncherSession() || launcherReturnButton || !TheWindowManager || !parentMainMenu || !buttonExit)
+	if (!EchelonIsLauncherSession() || launcherReturnButton || !TheWindowManager || !parentMainMenu || !buttonExit)
 		return;
 
 	launcherReturnContainer = dropDownWindows[DROPDOWN_MAIN];
@@ -605,15 +605,15 @@ static void initLauncherReturnButton()
 	launcherReturnButton->winSetDisabledTextColors(buttonExit->winGetDisabledTextColor(), buttonExit->winGetDisabledTextBorderColor());
 	launcherReturnButton->winSetHiliteTextColors(buttonExit->winGetHiliteTextColor(), buttonExit->winGetHiliteTextBorderColor());
 
-	const char *language = std::getenv("GENERALS_ARSENAL_UI_LANGUAGE");
+	const char *language = std::getenv("ECHELON_UI_LANGUAGE");
 	if (!language || !language[0]) language = std::getenv("LC_ALL");
 	if (!language || !language[0]) language = std::getenv("LC_MESSAGES");
 	if (!language || !language[0]) language = std::getenv("LANG");
 	UnicodeString text;
 	if (language && std::strncmp(language, "ru", 2) == 0)
-		text.format(L"ВЕРНУТЬСЯ В ARSENAL");
+		text.format(L"ВЕРНУТЬСЯ В ECHELON");
 	else
-		text.format(L"RETURN TO ARSENAL");
+		text.format(L"RETURN TO ECHELON");
 	GadgetButtonSetText(launcherReturnButton, text);
 	TheTransitionHandler->cloneWindowTransitions("MainMenu.wnd:ButtonExit", windowName, 1);
 }
@@ -1525,7 +1525,7 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 			if (launcherReturnButton && control == launcherReturnButton)
 			{
 				buttonPushed = TRUE;
-				GeneralsArsenalRequestReturnToLauncher();
+				EchelonRequestReturnToLauncher();
 				quitCallback();
 				break;
 			}
@@ -1742,8 +1742,8 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 			{
 #ifdef SAGE_UPDATE_CHECK
 				// GeneralsX @feature BenderAI 21/04/2026 Open GitHub releases page instead of legacy GameSpy patch download
-#ifdef GENERALS_ARSENAL_BRAND
-				SDL_OpenURL(GeneralsArsenalBrand::kReleasesUrl);
+#ifdef ECHELON_BRAND
+				SDL_OpenURL(EchelonBrand::kReleasesUrl);
 #else
 				SDL_OpenURL("https://github.com/fbraz3/GeneralsX/releases");
 #endif
@@ -1755,9 +1755,9 @@ WindowMsgHandledType MainMenuSystem( GameWindow *window, UnsignedInt msg,
 			else if( updateNotifyButton != nullptr && control == updateNotifyButton )
 			{
 				// GeneralsX @feature BenderAI 21/04/2026 Dynamic update button click -> open releases page
-#ifdef GENERALS_ARSENAL_BRAND
-				// GeneralsArsenal @feature Codex 13/08/2026 Keep the upstream notification behavior on the fork's release channel.
-				SDL_OpenURL(GeneralsArsenalBrand::kReleasesUrl);
+#ifdef ECHELON_BRAND
+				// Echelon @feature Codex 13/08/2026 Keep the upstream notification behavior on the fork's release channel.
+				SDL_OpenURL(EchelonBrand::kReleasesUrl);
 #else
 				SDL_OpenURL("https://github.com/fbraz3/GeneralsX/releases");
 #endif

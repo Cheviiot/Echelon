@@ -371,7 +371,7 @@ static void Resolve_Present_BackBuffer_Size(int gameW, int gameH, bool isWindowe
 	outW = (UINT)gameW;
 	outH = (UINT)gameH;
 
-	// GeneralsArsenal @bugfix Codex 14/08/2026 A hosted engine renders into the existing window instead of asking DXVK for a game-sized presentation surface.
+	// Echelon @bugfix Codex 14/08/2026 A hosted engine renders into the existing window instead of asking DXVK for a game-sized presentation surface.
 	if (DX8Wrapper::Is_Window_Geometry_Externally_Owned()) {
 		int windowW = gameW;
 		int windowH = gameH;
@@ -437,7 +437,7 @@ void *								DX8Wrapper::WindowModeRequestUserData				= nullptr;
 D3DFORMAT					DX8Wrapper::DisplayFormat	= D3DFMT_UNKNOWN;
 D3DMULTISAMPLE_TYPE DX8Wrapper::MultiSampleAntiAliasing	= DEFAULT_MSAA;
 
-// GeneralsArsenal @feature Codex 14/08/2026 Route hosted window-mode changes through the launcher-owned SDL transition coordinator.
+// Echelon @feature Codex 14/08/2026 Route hosted window-mode changes through the launcher-owned SDL transition coordinator.
 void DX8Wrapper::Set_Window_Mode_Request_Callback(WindowModeRequestFunc callback, void *userData)
 {
 	WindowModeRequestCallback = callback;
@@ -1062,7 +1062,7 @@ void DX8Wrapper::Release_Device()
 		DX8CALL(SetStreamSource(0, nullptr, 0));	//release reference count on last rendered vertex buffer
 		DX8CALL(SetIndices(nullptr,0));	//release reference count on last rendered index buffer
 
-		// GeneralsArsenal @bugfix Codex 13/08/2026 Release wrapper-owned COM texture and render-state references before releasing the DXVK device.
+		// Echelon @bugfix Codex 13/08/2026 Release wrapper-owned COM texture and render-state references before releasing the DXVK device.
 		// Shutdown used to delete CurrentCaps first, making the later texture cleanup unreachable and leaving the D3D8 device and Wayland sync surface alive.
 		Invalidate_Cached_Render_States();
 
@@ -1087,7 +1087,7 @@ void DX8Wrapper::Release_Device()
 		** Release the device
 		*/
 
-		// GeneralsArsenal @bugfix Codex 13/08/2026 Preserve the COM result; a nonzero value means DXVK and its Wayland surface are still alive.
+		// Echelon @bugfix Codex 13/08/2026 Preserve the COM result; a nonzero value means DXVK and its Wayland surface are still alive.
 		LastDeviceReleaseCount = D3DDevice->Release();
 		fprintf(stderr, "INFO: DX8Wrapper::Release_Device() remaining D3D8 device references: %lu\n",
 			LastDeviceReleaseCount);
@@ -1276,7 +1276,7 @@ void DX8Wrapper::Get_Format_Name(unsigned int format, StringClass *tex_format)
 
 void DX8Wrapper::Resize_And_Position_Window()
 {
-	// GeneralsArsenal @bugfix Codex 14/08/2026 The launcher owns the shared SDL window; game resolution changes must stay inside the render pipeline.
+	// Echelon @bugfix Codex 14/08/2026 The launcher owns the shared SDL window; game resolution changes must stay inside the render pipeline.
 	if (IsWindowGeometryExternallyOwned) {
 		return;
 	}

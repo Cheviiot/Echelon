@@ -1,0 +1,8 @@
+{
+  "name": "@ECHELON_PRODUCT_NAME@",
+  "executable": "@ECHELON_PRODUCT_SLUG@",
+  "application_id": "@ECHELON_FLATPAK_ID@",
+  "output_directory": "@ECHELON_OUTPUT_DIRECTORY@",
+  "data_directory": "@ECHELON_DATA_DIRECTORY@",
+  "install_slug": "@ECHELON_INSTALL_SLUG@"
+}

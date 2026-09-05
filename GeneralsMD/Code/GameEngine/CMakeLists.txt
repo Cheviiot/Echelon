@@ -1178,13 +1178,6 @@ if(SAGE_USE_SDL3)
     )
 endif()
 
-if(RTS_BUILD_UNIVERSAL_LAUNCHER)
-    # GeneralsX @build Codex 11/08/2026 Keep libstdc++ allocation pairs on the process allocator across the module boundary.
-    target_compile_definitions(z_gameengine PRIVATE
-        GENERALS_ARSENAL_BRAND=1
-        GENERALS_ARSENAL_ENGINE_MODULE_ALLOCATOR=1
-    )
-endif()
 
 target_link_libraries(z_gameengine PRIVATE
     corei_gameengine_private
@@ -1203,3 +1196,7 @@ target_precompile_headers(z_gameengine PRIVATE
     [["Utility/CppMacros.h"]] # Must be first, to be removed when abandoning VC6
 #    Include/Precompiled/PreRTS.h
 )
+
+if(RTS_BUILD_UNIVERSAL_LAUNCHER)
+    echelon_add_host_variant(z_gameengine)
+endif()

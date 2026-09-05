@@ -296,9 +296,9 @@ public:
 
 	static bool Is_Device_Lost() { return IsDeviceLost; }
 	static bool Is_Initted() { return IsInitted; }
-	// GeneralsArsenal @bugfix Codex 13/08/2026 Expose the final COM count so launcher quiescence cannot mistake a detached pointer for a destroyed DXVK device.
+	// Echelon @bugfix Codex 13/08/2026 Expose the final COM count so launcher quiescence cannot mistake a detached pointer for a destroyed DXVK device.
 	static unsigned long Get_Last_Device_Release_Count() { return LastDeviceReleaseCount; }
-	// GeneralsArsenal @feature Codex 14/08/2026 Separate the engine render resolution from a launcher-owned SDL window geometry.
+	// Echelon @feature Codex 14/08/2026 Separate the engine render resolution from a launcher-owned SDL window geometry.
 	static void Set_Window_Geometry_Externally_Owned(bool externallyOwned) { IsWindowGeometryExternallyOwned = externallyOwned; }
 	static bool Is_Window_Geometry_Externally_Owned() { return IsWindowGeometryExternallyOwned; }
 	typedef bool (*WindowModeRequestFunc)(void *userData, bool windowed, int renderWidth, int renderHeight);
