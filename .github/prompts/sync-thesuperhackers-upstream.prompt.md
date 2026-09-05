@@ -5,6 +5,8 @@ argument-hint: Optional extra sync focus areas or constraints (for example: "pri
 agent: Bender
 ---
 
+> Echelon context: TheSuperHackers is a reference baseline. Normal updates arrive through `fbraz3/GeneralsX`; use `docs/HOWTO/SYNC_GENERALSX_UPSTREAM.md`. A separately requested direct merge must map the upstream root with `-Xsubtree=GeneralsX` on a `codex/` branch. Engine paths below are relative to `GeneralsX/`. Preserve root product files, local-only mods and the ordinary directory layout.
+
 # Sync TheSuperHackers Upstream
 
 Perform a full upstream sync from the `thesuperhackers` remote into this repository while preserving the working cross-platform nature of `GeneralsX`.

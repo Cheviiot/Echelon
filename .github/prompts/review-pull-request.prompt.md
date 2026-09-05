@@ -46,8 +46,8 @@ Execute a comprehensive review and resolution cycle for the specified Pull Reque
 ### Step 2: PR Architecture & Safety Audit
 Analyze the PR diff against core `GeneralsX` rules (see `AGENTS.md` and `.github/instructions/`):
 - **Deterministic Math & Cross-Play**: Ensure no raw `libm` calls (`sin`, `cos`, `sqrt`, etc.) were introduced in simulation logic; use `WWMath` equivalents. Check integer casts of divisions for zero/NaN guards.
-- **Platform Isolation**: Win32/POSIX/Cocoa native APIs must reside in `Core/GameEngineDevice/` or `Core/Libraries/Source/Platform/` (with exceptions for self-contained diagnostic dumpers guarded under specific macros).
-- **Generals Base Parity**: Verify if platform, engine, or shared bugfixes in Zero Hour (`GeneralsMD/`) have been backported to Generals base game (`Generals/`).
+- **Platform Isolation**: Win32/POSIX/Cocoa native APIs must reside in `GeneralsX/Core/GameEngineDevice/` or `GeneralsX/Core/Libraries/Source/Platform/` (with exceptions for self-contained diagnostic dumpers guarded under specific macros).
+- **Generals Base Parity**: Verify if platform, engine, or shared bugfixes in Zero Hour (`GeneralsX/GeneralsMD/`) have been backported to Generals base game (`GeneralsX/Generals/`).
 - **OpenAL / MiniAudio Parity**: Audio changes in one backend must be matched in the other.
 - **Code Annotations**: Ensure changes are annotated with `// GeneralsX @keyword author DD/MM/YYYY Description`. Note: `// Upstream reference:` applies only when porting patches from external upstream repositories.
 
