@@ -1,99 +1,33 @@
-# Synchronizing GeneralsX Upstream
+# Synchronize GeneralsX upstream
 
-## Purpose
+The product is maintained in the root of the Echelon repository. The integrated engine is an ordinary tracked `GeneralsX/` directory. Do not create a GeneralsX submodule, clone over this directory, or rewrite published history.
 
-Echelon is maintained as a small branding, launcher, and packaging overlay on top of [fbraz3/GeneralsX](https://github.com/fbraz3/GeneralsX). Updates are merged through dated review branches. Never replace the repository with a source archive, rebase published Echelon history, or apply blanket `ours`/`theirs` conflict resolution.
+## Review a pinned update
 
-## One-time repository setup
-
-Verify the remotes and enable recorded conflict resolution:
+Start from a clean working tree with all existing development preserved in commits. Verify the remotes, fetch the upstream history, and record the exact incoming SHA and range:
 
 ```bash
-git remote get-url origin
-git remote get-url upstream
-git config rerere.enabled true
-git config rerere.autoupdate true
+git remote -v
+git fetch upstream main
+git switch -c codex/upstream-sync-YYYY-MM-DD
+git log --oneline HEAD..upstream/main
+git merge --no-ff --no-commit -Xsubtree=GeneralsX upstream/main
 ```
 
-Expected remotes:
+The subtree merge option maps the upstream root into `GeneralsX/`. Review `git status` and the entire staged diff before committing. All upstream engine paths must stay inside that prefix; Echelon's root CMake, launcher, integration, brand, packaging and workflow files must remain intact. If Git cannot map the historical base correctly, abort the merge and investigate the tree mapping rather than accepting misplaced files.
 
-```text
-origin    https://github.com/Cheviiot/Echelon.git
-upstream  https://github.com/fbraz3/GeneralsX.git
-```
+## Ownership and conflict resolution
 
-## Prepare a synchronization branch
+- Root `Launcher/`, `EngineIntegration/`, `cmake/`, `assets/launcher/`, `flatpak/`, product scripts and docs belong to Echelon.
+- `GeneralsX/` retains upstream structure plus reviewed engine changes. General bug fixes apply to both games; platform behavior stays inside the platform layer.
+- `GENERALSX_SOURCE_DIR` and `GENERALSX_BINARY_DIR` contain upstream build paths. `ECHELON_SOURCE_DIR` and `ECHELON_BINARY_DIR` identify the parent product.
+- Hosted and standalone libraries compile separately. Do not apply hosted allocator or brand flags to `g_generals` or `z_generals`.
+- Review each conflict by behavior. Never use directory-wide ours/theirs decisions for platform or game logic.
+- Preserve upstream attribution and deterministic math/audio behavior.
+- The retired mod catalog must not return through a merge or replacement URL.
 
-Start with a clean tree. Update the fork and inspect upstream before merging:
+Update the pinned revision in `UPSTREAM.md`, the source ownership report and the monthly worklog. Then build both engines with `RTS_BUILD_UNIVERSAL_LAUNCHER=ON` and `OFF`, validate module exports, local content, headless dispatch, 20 alternating sessions, supervisor recovery, replay CRC and platform packaging. Report environment-limited checks explicitly.
 
-```bash
-git switch main
-git pull --ff-only origin main
-git fetch --prune upstream
-git log --oneline --no-merges main..upstream/main
-git diff --stat main...upstream/main
-git switch -c generalsx-sync-MM-DD-YYYY
-git merge --no-ff upstream/main
-```
+Use the existing `ubuntu-dev` Distrobox on the maintainer's ALT workstation. New source layouts require a fresh build directory; preserve old caches for comparison. See [the foundation report](../WORKDIR/reports/ECHELON_FOUNDATION.md) for commands and results.
 
-Replace `MM-DD-YYYY` with the merge date. Record the upstream head SHA, commit count, touched subsystems, and expected risk areas in the pull request.
-
-## Conflict policy
-
-Resolve each conflict from its intent:
-
-- Accept upstream engine, gameplay, common-library, platform, determinism, and safety fixes unless there is a documented Echelon incompatibility.
-- Preserve the Echelon launcher, `Echelon` public executable, private Echelon ABI, `.Echelon` data root, application ID, logo, and packaging.
-- If upstream changes its own launcher or packaging, port the functional change into the Echelon layer without restoring GeneralsX public identifiers.
-- Keep `Generals/`, `GeneralsMD/`, `Core/`, `g_generals`, and `z_generals` aligned with upstream names.
-- Preserve historical `GeneralsX @...` annotations and attribution. Use `Echelon @...` only for new fork-owned changes.
-- Never edit generated dependency trees under `build/_deps`.
-
-The highest-risk files are the root CMake configuration, engine entry points, SDL/DXVK window ownership, audio teardown, global memory managers, Flatpak manifests, and launcher return hooks in both game branches.
-
-After resolving each file, inspect the combined result before staging it:
-
-```bash
-git diff --check
-git diff --merge
-git add path/to/resolved-file
-git status --short
-```
-
-## Required validation
-
-Build inside the `ubuntu-dev` Distrobox environment:
-
-```bash
-project_root="$(pwd -P)"
-export VCPKG_ROOT="${VCPKG_ROOT:-$HOME/.generalsx/vcpkg}"
-distrobox enter ubuntu-dev -- bash -lc '
-  cd "$1" &&
-  cmake --fresh --preset linux64-deploy -DRTS_BUILD_UNIVERSAL_LAUNCHER=ON &&
-  cmake --build build/linux64-deploy --target echelon_launcher g_generals z_generals -j4
-' bash "$project_root"
-```
-
-Then verify:
-
-1. Both engine modules export only `Echelon_GetEngineModuleV2`.
-2. Generals and Zero Hour start, return to Echelon, and can be alternated ten times.
-3. Normal game exit terminates the process.
-4. Linux replay/CRC tests still pass for retail replays.
-5. Headless runs bypass the selector.
-6. A clean HOME creates only `.Echelon`; old paths remain untouched.
-7. The unified Flatpak builds and runs as `io.github.cheviiot.Echelon`.
-8. RU/EN, 4:3, 16:9, 16:10, HiDPI, windowed, and fullscreen layouts remain usable.
-
-## Pull request report
-
-The synchronization pull request must include:
-
-- upstream range and head SHA;
-- number of incoming commits;
-- summary by subsystem;
-- every manually resolved conflict and the chosen intent;
-- build, replay, ABI, Flatpak, and runtime results;
-- known follow-up work or explicitly deferred upstream changes.
-
-Merge the synchronization branch through review. Do not merge upstream directly into `main` and do not enable automatic upstream merges.
+Create a reviewable PR in `Cheviiot/Echelon`. Do not merge or publish a release automatically.

@@ -80,10 +80,10 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
           New-Item -ItemType Directory -Force ci-artifacts | Out-Null
-          Copy-Item build/win32-vcpkg/${{ matrix.game.folder }}/Release/${{ matrix.game.exe }} artifacts/
-          Copy-Item build/win32-vcpkg/${{ matrix.game.folder }}/Release/${{ matrix.game.pdb }} artifacts/
+          Copy-Item build/win32-vcpkg/GeneralsX/${{ matrix.game.folder }}/Release/${{ matrix.game.exe }} artifacts/
+          Copy-Item build/win32-vcpkg/GeneralsX/${{ matrix.game.folder }}/Release/${{ matrix.game.pdb }} artifacts/
           Copy-Item build/win32-vcpkg/vcpkg_installed/x86-windows/bin/zlib1.dll artifacts/
-          Copy-Item build/win32-vcpkg/${{ matrix.game.folder }}/Release/${{ matrix.game.exe }} ci-artifacts/
+          Copy-Item build/win32-vcpkg/GeneralsX/${{ matrix.game.folder }}/Release/${{ matrix.game.exe }} ci-artifacts/
           Copy-Item build/win32-vcpkg/vcpkg_installed/x86-windows/bin/zlib1.dll ci-artifacts/
 
           foreach ($name in @("binkw32.dll", "mss32.dll")) {

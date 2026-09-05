@@ -373,7 +373,11 @@ jobs:
 
       - name: Verify Build Artifacts
         run: |
-          BINARY="build/${{ inputs.preset }}/${{ matrix.game.value }}/${{ matrix.game.output }}"
+          if [ "${{ matrix.game.id }}" = echelon ]; then
+            BINARY="build/${{ inputs.preset }}/Echelon/Echelon"
+          else
+            BINARY="build/${{ inputs.preset }}/GeneralsX/${{ matrix.game.value }}/${{ matrix.game.output }}"
+          fi
           if [ -f "$BINARY" ]; then
             echo "✅ Binary built: ${{ matrix.game.output }}"
             file "$BINARY"

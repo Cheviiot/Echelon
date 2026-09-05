@@ -10,13 +10,28 @@ The local mod manager imports archives and folders, verifies installed content, 
 ## Project status
 
 - Linux packaging produces one Flatpak: `io.github.cheviiot.Echelon`.
-- macOS packaging produces one `Echelon.app` containing both engines.
+- macOS packaging is prepared for one `Echelon.app` containing both engines; execution on macOS remains unverified.
 - The public executable is `Echelon`.
 - Generals and Zero Hour remain separate private engine modules.
 - Retail game assets are not included. You must provide data from a legally owned copy.
 - Linux and macOS share the SDL3, DXVK, OpenAL, and 64-bit platform stack inherited from GeneralsX.
 
-See the [installation guide](docs/HOWTO/INSTALLATION.md), [launcher guide](docs/HOWTO/ECHELON_LAUNCHER.md), and [build guides](docs/BUILD/) for details.
+See the [installation guide](docs/HOWTO/INSTALLATION.md), [launcher guide](docs/HOWTO/ECHELON_LAUNCHER.md), and [tested build environment](docs/WORKDIR/reports/ECHELON_FOUNDATION.md#build-environment) for details.
+
+## Source layout
+
+```text
+Launcher/          Echelon UI, settings and local mod management
+EngineIntegration/ Shared host ABI, engine entry and content layers
+cmake/             Echelon identity and hosted build variants
+assets/            Product artwork and redistributable font
+scripts/           Product builds, packaging and QA
+flatpak/           Unified Linux package
+docs/              Our guides, decisions and worklog
+GeneralsX/         Upstream engine, libraries, tools and historical docs
+```
+
+`GeneralsX/` is not a submodule. Engine fixes remain tracked in this repository; future upstream merges use the directory prefix. The historical DXVK reference inside it retains its existing submodule registration.
 
 ## Command line
 
@@ -50,7 +65,7 @@ The existing `g_generals` and `z_generals` targets remain available for upstream
 
 Echelon is a fork of [fbraz3/GeneralsX](https://github.com/fbraz3/GeneralsX). It preserves the complete Git history, GPL license, contributor attribution, and the upstream engine directory structure.
 
-The fork owns `Launcher/`, `LauncherIntegration`, brand configuration, and product packaging. The ownership map and validation record are maintained in [the foundation report](docs/WORKDIR/reports/ECHELON_FOUNDATION.md). Engine improvements continue to be integrated from GeneralsX through reviewed Git merges instead of source snapshots or history rewrites. See [Synchronizing GeneralsX upstream](docs/HOWTO/SYNC_GENERALSX_UPSTREAM.md).
+Our source lives at the repository root. GeneralsX is an ordinary tracked directory, with reviewed engine changes preserved inside it. The fork owns `Launcher/`, `EngineIntegration/`, brand configuration, and product packaging. The ownership map and validation record are maintained in [the foundation report](docs/WORKDIR/reports/ECHELON_FOUNDATION.md). Engine improvements continue to be integrated from GeneralsX through reviewed Git merges instead of source snapshots or history rewrites. See [Synchronizing GeneralsX upstream](docs/HOWTO/SYNC_GENERALSX_UPSTREAM.md).
 
 GeneralsX itself builds on major community efforts:
 

@@ -25,6 +25,7 @@ jobs:
     outputs:
       zh-should-build: ${{ steps.filter.outputs.zh-should-build }}
       base-should-build: ${{ steps.filter.outputs.base-should-build }}
+      replay-assets-available: ${{ steps.assets.outputs.available }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
@@ -36,9 +37,12 @@ jobs:
           token: ''
           filters: |
             zh-should-build:
-              - 'GeneralsMD/**'
-              - 'Core/**'
-              - 'Dependencies/**'
+              - 'GeneralsX/**'
+              - 'Launcher/**'
+              - 'EngineIntegration/**'
+              - 'assets/**'
+              - 'flatpak/**'
+              - 'scripts/**'
               - 'cmake/**'
               - 'CMakeLists.txt'
               - 'CMakePresets.json'
@@ -46,15 +50,30 @@ jobs:
               - '.github/workflows/replay-tests*.yml'
               - '.github/workflows/ci.yml'
             base-should-build:
-              - 'Generals/**'
-              - 'Core/**'
-              - 'Dependencies/**'
+              - 'GeneralsX/**'
+              - 'Launcher/**'
+              - 'EngineIntegration/**'
+              - 'assets/**'
+              - 'flatpak/**'
+              - 'scripts/**'
               - 'cmake/**'
               - 'CMakeLists.txt'
               - 'CMakePresets.json'
               - '.github/workflows/build-*.yml'
               - '.github/workflows/replay-tests*.yml'
               - '.github/workflows/ci.yml'
+
+      - name: Check replay asset availability
+        id: assets
+        env:
+          REPLAY_ASSETS_KEY: ${{ secrets.ASSETS_KEY }}
+        run: |
+          if [ -n "$REPLAY_ASSETS_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Replay tests skipped: ASSETS_KEY is not configured for this run. CRC compatibility is not verified." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Build Trigger Summary
         run: |
@@ -100,8 +119,8 @@ jobs:
 
   replay-test-linux:
     name: Replay Tests (linux)
-    needs: [build-linux-flatpak]
-    if: needs.build-linux-flatpak.result == 'success'
+    needs: [detect-changes, build-linux-flatpak]
+    if: needs.build-linux-flatpak.result == 'success' && needs.detect-changes.outputs.replay-assets-available == 'true'
     uses: ./.github/workflows/replay-tests.yml
     with:
       platform: linux-flatpak
@@ -111,19 +130,19 @@ jobs:
 
   replay-test-macos:
     name: Replay Tests (macos)
-    needs: [build-macos]
-    if: needs.build-macos.result == 'success'
+    needs: [detect-changes, build-macos]
+    if: needs.build-macos.result == 'success' && needs.detect-changes.outputs.replay-assets-available == 'true'
     uses: ./.github/workflows/replay-tests.yml
     with:
       platform: macos
-      game-artifact: macos-generalsxzh-app
+      game-artifact: macos-echelon-app
     secrets:
       ASSETS_KEY: ${{ secrets.ASSETS_KEY }}
 
   replay-test-windows:
     name: Replay Tests (windows)
-    needs: [build-windows]
-    if: needs.build-windows.result == 'success'
+    needs: [detect-changes, build-windows]
+    if: needs.build-windows.result == 'success' && needs.detect-changes.outputs.replay-assets-available == 'true'
     uses: ./.github/workflows/replay-tests-windows.yml
     with:
       game-artifact: generalsxzh-windows-x86-replay-test-only

@@ -89,7 +89,7 @@ modules:
       - install -Dm644 assets/launcher/fonts/LICENSE /app/share/licenses/echelon/DejaVuSans-LICENSE
       - install -Dm644 yaml-cpp-src/LICENSE /app/share/licenses/echelon/yaml-cpp-LICENSE
       - install -Dm644 libarchive-src/COPYING /app/share/licenses/echelon/libarchive-COPYING
-      - install -Dm644 resources/dxvk/dxvk.conf /app/share/echelon/dxvk.conf
+      - install -Dm644 GeneralsX/resources/dxvk/dxvk.conf /app/share/echelon/dxvk.conf
       - install -d /app/lib
       - cp -a /run/build/echelon/dxvk-src/lib/libdxvk_d3d8.so* /app/lib/
       - cp -a /run/build/echelon/dxvk-src/lib/libdxvk_d3d9.so* /app/lib/
@@ -97,7 +97,7 @@ modules:
       - if [ -d build-flatpak/_deps/sdl3_image-build ]; then cp -a build-flatpak/_deps/sdl3_image-build/libSDL3_image.so* /app/lib/; fi
       - if [ -d build-flatpak/_deps/openal_soft-build ]; then cp -a build-flatpak/_deps/openal_soft-build/libopenal.so* /app/lib/; fi
       - find build-flatpak -name "libgamespy.so*" -type f -exec cp -a {} /app/lib/ \;
-      - if [ -f build-flatpak/Patches/SagePatch/libsage_patch.so ]; then cp -a build-flatpak/Patches/SagePatch/libsage_patch.so /app/lib/; fi
+      - if [ -f build-flatpak/GeneralsX/Patches/SagePatch/libsage_patch.so ]; then cp -a build-flatpak/GeneralsX/Patches/SagePatch/libsage_patch.so /app/lib/; fi
       - |
         for f in /app/lib/lib*.so.*; do
           b="$(basename "$f")"

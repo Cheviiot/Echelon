@@ -48,7 +48,7 @@ jobs:
                 | awk -F/ 'NF { count[$1]++ } END { for (path in count) printf "- `%s`: %d files\n", path, count[path] }' \
                 | sort
               echo ""
-              echo "Create a reviewed \`generalsx-sync-MM-DD-YYYY\` branch; this workflow never merges or pushes."
+              echo "Create a reviewed \`codex/upstream-sync-YYYY-MM-DD\` branch; this workflow never merges or pushes."
             else
               echo "Echelon already contains the current GeneralsX main history."
             fi

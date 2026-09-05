@@ -47,7 +47,7 @@ def main():
     if not sdk:
         raise RuntimeError("Set VULKAN_SDK to an SDK containing libvulkan and libMoltenVK")
     roots = [executable, *modules, sdk / "lib/libvulkan.1.dylib", sdk / "lib/libMoltenVK.dylib"]
-    sage_patch = build / "Patches/SagePatch/libsage_patch.dylib"
+    sage_patch = build / "GeneralsX/Patches/SagePatch/libsage_patch.dylib"
     if sage_patch.is_file():
         roots.append(sage_patch)
     for path in roots:
@@ -125,7 +125,7 @@ def main():
             raise RuntimeError("Place the DejaVu LICENSE next to ECHELON_BUNDLE_FONT")
         shutil.copy2(license_path, resources / "DejaVu-LICENSE")
         shutil.copy2(repo / "LICENSE.md", resources / "LICENSE.md")
-        shutil.copy2(repo / "resources/dxvk/dxvk.conf", resources / "dxvk.conf")
+        shutil.copy2(repo / "GeneralsX/resources/dxvk/dxvk.conf", resources / "dxvk.conf")
         (resources / "MoltenVK_icd.json").write_text(json.dumps({"file_format_version": "1.0.0", "ICD": {
             "library_path": "../MacOS/libMoltenVK.dylib", "api_version": "1.4.0", "is_portability_driver": True}}))
         wrapper = macos / "run.sh"
@@ -145,10 +145,18 @@ fi
 exec "${app_bin}/''' + brand["executable"] + '''" "$@"
 ''')
         wrapper.chmod(0o755)
+        iconset = Path(temporary) / "Echelon.iconset"
+        iconset.mkdir()
+        for size in (16, 32, 128, 256, 512):
+            for scale in (1, 2):
+                suffix = "@2x" if scale == 2 else ""
+                run("sips", "-z", str(size * scale), str(size * scale),
+                    str(resources / "echelon-icon.png"), "--out", str(iconset / f"icon_{size}x{size}{suffix}.png"))
+        run("iconutil", "-c", "icns", str(iconset), "-o", str(resources / "Echelon.icns"))
         plist = {"CFBundleName": brand["name"], "CFBundleDisplayName": brand["name"],
                  "CFBundleIdentifier": brand["application_id"], "CFBundleExecutable": "run.sh",
                  "CFBundleVersion": "1", "CFBundleShortVersionString": "0.1.0",
-                 "CFBundlePackageType": "APPL", "LSMinimumSystemVersion": "15.0",
+                 "CFBundlePackageType": "APPL", "CFBundleIconFile": "Echelon.icns", "LSMinimumSystemVersion": "15.0",
                  "NSHighResolutionCapable": True}
         (app / "Contents/Info.plist").write_bytes(plistlib.dumps(plist))
         for name in staged:

@@ -1,13 +1,13 @@
 # Echelon @build Codex 05/09/2026 Compile hosted engines independently of upstream monolithic targets.
 configure_file(
-    "${CMAKE_SOURCE_DIR}/Launcher/BrandIdentity.h.in"
-    "${CMAKE_BINARY_DIR}/generated/LauncherIntegration/BrandIdentity.h"
+    "${ECHELON_SOURCE_DIR}/Launcher/BrandIdentity.h.in"
+    "${ECHELON_BINARY_DIR}/generated/LauncherIntegration/BrandIdentity.h"
     @ONLY
 )
-configure_file("${CMAKE_SOURCE_DIR}/Launcher/BrandIdentity.json.in"
-    "${CMAKE_BINARY_DIR}/generated/brand.json" @ONLY)
+configure_file("${ECHELON_SOURCE_DIR}/Launcher/BrandIdentity.json.in"
+    "${ECHELON_BINARY_DIR}/generated/brand.json" @ONLY)
 add_library(echelon_brand INTERFACE)
-target_include_directories(echelon_brand INTERFACE "${CMAKE_BINARY_DIR}/generated")
+target_include_directories(echelon_brand INTERFACE "${ECHELON_BINARY_DIR}/generated")
 
 function(echelon_add_host_variant base)
     get_target_property(sources ${base} SOURCES)

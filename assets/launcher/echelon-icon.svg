@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="-22 -8 160 160" role="img" aria-label="Echelon">
+  <defs>
+    <linearGradient id="gold" x2="0" y2="1"><stop stop-color="#ffdf45"/><stop offset=".46" stop-color="#ffad0b"/><stop offset="1" stop-color="#d45c00"/></linearGradient>
+    <linearGradient id="metal" x2="0" y2="1"><stop stop-color="#65b6ff"/><stop offset=".12" stop-color="#d7e1e8"/><stop offset=".44" stop-color="#48525d"/><stop offset=".85" stop-color="#a9b4ba"/><stop offset="1" stop-color="#343e45"/></linearGradient>
+    <path id="E" d="M10 0H100V28H32V55H88V83H32V112H100V140H0V10Z"/>
+  </defs>
+  <use href="#E" transform="translate(5 8)" fill="#111820" stroke="#080d12" stroke-width="12" stroke-linejoin="bevel"/>
+  <use href="#E" fill="url(#gold)" stroke="url(#metal)" stroke-width="9" stroke-linejoin="bevel"/>
+  <use href="#E" fill="url(#gold)" stroke="#111b23" stroke-width="2" stroke-linejoin="bevel"/>
+</svg>

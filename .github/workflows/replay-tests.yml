@@ -102,40 +102,12 @@ jobs:
         if: inputs.platform == 'macos'
         run: |
           mkdir -p /tmp/game-bundle
-          TAR_FILE=$(find /tmp/game-artifact -name "*.tar" | head -1)
-          echo "Extracting: $TAR_FILE"
-          tar -xf "$TAR_FILE" -C /tmp/game-bundle
-
-          # Resolve app layout directly to avoid path inference mistakes.
-          APP_DIR=$(find /tmp/game-bundle -type d -name "*.app" | head -1)
-          if [ -z "$APP_DIR" ]; then
-            echo "ERROR: .app bundle not found after extraction"
-            find /tmp/game-bundle -maxdepth 4 -print
-            exit 1
-          fi
-
-          APP_RESOURCES="$APP_DIR/Contents/Resources"
-          GAME_DIR="$APP_RESOURCES/bin"
-          GAME_BIN="$GAME_DIR/GeneralsXZH"
-
-          if [ ! -d "$APP_RESOURCES" ]; then
-            echo "ERROR: Resources dir not found: $APP_RESOURCES"
-            find "$APP_DIR" -maxdepth 4 -print
-            exit 1
-          fi
-
-          if [ ! -f "$GAME_BIN" ]; then
-            echo "ERROR: Game binary not found at expected path: $GAME_BIN"
-            find "$APP_RESOURCES" -maxdepth 4 -type f -name "GeneralsXZH" -print
-            exit 1
-          fi
-
-          echo "GAME_BIN=$GAME_BIN" >> $GITHUB_ENV
-          echo "GAME_DIR=$GAME_DIR" >> $GITHUB_ENV
-          echo "APP_RESOURCES=$APP_RESOURCES" >> $GITHUB_ENV
-
-          echo "Game bundle contents (Resources):"
-          ls -la "$APP_RESOURCES/"
+          unzip -q /tmp/game-artifact/Echelon-macos-arm64.zip -d /tmp/game-bundle
+          APP_DIR="/tmp/game-bundle/Echelon.app"
+          test -x "$APP_DIR/Contents/MacOS/Echelon"
+          echo "GAME_BIN=$APP_DIR/Contents/MacOS/run.sh" >> "$GITHUB_ENV"
+          echo "GAME_DIR=$HOME/.Echelon/GeneralsZH" >> "$GITHUB_ENV"
+          echo "APP_RESOURCES=$APP_DIR/Contents/Resources" >> "$GITHUB_ENV"
 
       - name: Install game bundle (Linux Flatpak)
         if: inputs.platform == 'linux-flatpak'
@@ -223,10 +195,9 @@ jobs:
       - name: Install game assets (macOS)
         if: inputs.platform == 'macos'
         run: |
-          echo "Copying game assets from cache into: $GAME_DIR"
-          cp -r /tmp/cached-assets/GeneralsZH/. "$GAME_DIR/"
-          echo "Big files found:"
-          ls "$GAME_DIR/"*.big 2>/dev/null | head -10 || echo "(none found)"
+          mkdir -p "$HOME/.Echelon/Generals" "$HOME/.Echelon/GeneralsZH"
+          cp -R /tmp/cached-assets/Generals/. "$HOME/.Echelon/Generals/"
+          cp -R /tmp/cached-assets/GeneralsZH/. "$HOME/.Echelon/GeneralsZH/"
 
       # -----------------------------------------------------------------------
       # 5. Check out replay repo and install maps + platform-specific replays
@@ -475,8 +446,8 @@ jobs:
 
           cd "$GAME_DIR"
 
-          export DYLD_LIBRARY_PATH="$APP_RESOURCES/lib:${DYLD_LIBRARY_PATH:-}"
-          export DYLD_FALLBACK_LIBRARY_PATH="$APP_RESOURCES/lib:${DYLD_FALLBACK_LIBRARY_PATH:-}"
+          export DYLD_LIBRARY_PATH="$APP_RESOURCES/../MacOS:${DYLD_LIBRARY_PATH:-}"
+          export DYLD_FALLBACK_LIBRARY_PATH="$APP_RESOURCES/../MacOS:${DYLD_FALLBACK_LIBRARY_PATH:-}"
           export DXVK_WSI_DRIVER=SDL3
           export DXVK_LOG_LEVEL=none
           # Point the game to the extracted assets dir (bin/ alongside the binary)
@@ -502,7 +473,7 @@ jobs:
             echo "=== $NAME ==="
 
             set +e
-            OUTPUT=$($TIMEOUT_BIN 180 ./GeneralsXZH -headless -replay "$rep" 2>&1)
+            OUTPUT=$($TIMEOUT_BIN 180 "$GAME_BIN" --profile=zerohour -headless -replay "$rep" 2>&1)
             CODE=$?
             set -e
 

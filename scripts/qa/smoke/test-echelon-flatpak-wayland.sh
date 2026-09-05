@@ -70,7 +70,7 @@ printf '%s\n' 'Resolution = 1024 768' >"${qa_home}/.Echelon/UserData/GeneralsZH/
 
 # shellcheck disable=SC2016 # Variables are intentionally expanded by the nested shell.
 qa_root="${qa_root}" qa_home="${qa_home}" app_id="${app_id}" cycle_count="${cycle_count}" \
-	update_count="${update_count}" dbus-run-session -- bash -c '
+	update_count="${update_count}" source_data_root="${source_data_root}" dbus-run-session -- bash -c '
 	set -euo pipefail
 	unset DISPLAY WAYLAND_DISPLAY
 	export XDG_RUNTIME_DIR="${qa_root}/runtime"
@@ -85,7 +85,7 @@ qa_root="${qa_root}" qa_home="${qa_home}" app_id="${app_id}" cycle_count="${cycl
 	[[ -S "${XDG_RUNTIME_DIR}/echelon-flatpak-wl" ]]
 	env WAYLAND_DISPLAY=echelon-flatpak-wl SDL_VIDEODRIVER=wayland SDL_AUDIODRIVER=dummy \
 		WAYLAND_DEBUG=client \
-		timeout 600s flatpak run --filesystem="${qa_home}" --env=HOME="${qa_home}" "${app_id}" \
+		timeout 600s flatpak run --filesystem="${qa_home}" --filesystem="${source_data_root}:ro" --env=HOME="${qa_home}" "${app_id}" \
 		--internal-ui-worker --profile=generals --internal-test-return-after-updates="${update_count}" \
 		--internal-test-cycles="${cycle_count}" >"${qa_root}/flatpak.log" 2>&1
 '
@@ -147,21 +147,21 @@ fi
 # Echelon @bugfix Codex 13/08/2026 Ensure the packaged DXVK instance
 # destroys every explicit-sync surface before the launcher renderer reuses the window.
 syncobj_check="$(awk '
-	/get_surface\(new id wp_linux_drm_syncobj_surface_v1#[0-9]+, wl_surface#[0-9]+\)/ {
+	/get_surface\(new id wp_linux_drm_syncobj_surface_v1[@#][0-9]+, wl_surface[@#][0-9]+\)/ {
 		object = $0
-		sub(/^.*new id wp_linux_drm_syncobj_surface_v1#/, "", object)
+		sub(/^.*new id wp_linux_drm_syncobj_surface_v1[@#]/, "", object)
 		sub(/,.*/, "", object)
 		surface = $0
-		sub(/^.*wl_surface#/, "", surface)
+		sub(/^.*wl_surface[@#]/, "", surface)
 		sub(/\).*/, "", surface)
 		if (active[surface] != "") failures++
 		active[surface] = object
 		owner[object] = surface
 		created++
 	}
-	/wp_linux_drm_syncobj_surface_v1#[0-9]+\.destroy\(\)/ {
+	/wp_linux_drm_syncobj_surface_v1[@#][0-9]+\.destroy\(\)/ {
 		object = $0
-		sub(/^.*wp_linux_drm_syncobj_surface_v1#/, "", object)
+		sub(/^.*wp_linux_drm_syncobj_surface_v1[@#]/, "", object)
 		sub(/\.destroy.*/, "", object)
 		surface = owner[object]
 		if (surface == "" || active[surface] != object) failures++
@@ -176,7 +176,7 @@ syncobj_check="$(awk '
 	}
 ' "${log_file}")"
 read -r syncobj_created syncobj_destroyed syncobj_remaining syncobj_failures <<<"${syncobj_check}"
-if (( syncobj_created == 0 || syncobj_created != syncobj_destroyed || syncobj_remaining != 0 || syncobj_failures != 0 )); then
+if (( syncobj_created != syncobj_destroyed || syncobj_remaining != 0 || syncobj_failures != 0 )); then
 	echo "ERROR: Installed Flatpak leaked Wayland explicit-sync surfaces (created=${syncobj_created}, destroyed=${syncobj_destroyed}, remaining=${syncobj_remaining}, failures=${syncobj_failures})" >&2
 	exit 1
 fi
@@ -186,5 +186,12 @@ echo "PASS: Installed Flatpak restored launcher window state after every handoff
 if [[ "${cycle_count}" -ge 2 ]]; then
 	echo "PASS: Installed engine presentation changed independently between 800x600 windowed and 1024x768 fullscreen"
 fi
-echo "PASS: Installed Flatpak balanced Wayland explicit-sync surfaces (${syncobj_created}/${syncobj_destroyed})"
+if (( syncobj_created > 0 )); then
+	echo "PASS: Installed Flatpak balanced Wayland explicit-sync surfaces (${syncobj_created}/${syncobj_destroyed})"
+elif rg -q 'wp_linux_drm_syncobj_manager_v1' "${log_file}"; then
+	echo "ERROR: Explicit-sync was advertised but not exercised" >&2
+	exit 1
+else
+	echo "SKIP: Compositor does not advertise the Wayland explicit-sync protocol"
+fi
 echo "INFO: Logs: ${qa_root}"

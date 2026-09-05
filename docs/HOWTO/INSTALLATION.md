@@ -1,19 +1,28 @@
-# How to Install Echelon
+# Install Echelon
 
-## Prerequisites
-
-1. You must own a legitimate copy of the game. We build and test against the [Steam version](https://store.steampowered.com/app/2732960/Command__Conquer_Generals_Zero_Hour/). Other retail releases may work, but are not officially supported.
-
-   > **On macOS or Linux?** This title is Windows-only on Steam. On macOS, Steam usually does not show an install option. On Linux, installation may be available via Steam Play/Proton depending on your configuration. See [GETTING_THE_GAME_FILES.md](GETTING_THE_GAME_FILES.md) for all supported ways to obtain game files.
-
-2. Keep the original Generals and Zero Hour game data available on the machine. On first launch, the launcher can import a selected source directory into `$HOME/.Echelon/Generals` or `$HOME/.Echelon/GeneralsZH`. It does not inspect or migrate GeneralsX directories automatically.
+Echelon is one application containing the Generals and Zero Hour engine modules. Retail game data is not included; use files from your own copy of the games. For obtaining the files, see the [upstream guide](../../GeneralsX/docs/HOWTO/GETTING_THE_GAME_FILES.md).
 
 ## Linux
 
-1. Install Flatpak for your distribution by following the official setup guide:
+Install Flatpak using your distribution's supported method. Install the unified package from an Echelon release or your local build:
 
-   https://flatpak.org/setup/
+```bash
+flatpak --user install ./Echelon-linux.flatpak
+flatpak run io.github.cheviiot.Echelon
+```
 
-   Each Linux distribution packages Flatpak differently, so rely on the upstream instructions for installing the Flatpak tool itself.
+A local packaging build produces `build/Echelon-linux64-deploy.flatpak`; the release workflow names the downloadable asset `Echelon-linux.flatpak`.
 
-2. Download the unified Linux Flatpak release asset (`Echelon-linux.flatpak`). It contains the launcher and both open-source engine modules, but no retail assets.
+## macOS
+
+Unpack `Echelon-macos-arm64.zip`, move `Echelon.app` to Applications, and launch it. This build targets Apple Silicon and macOS 15 or newer. Local and CI bundles use ad-hoc signing; Developer ID signing and notarization are separate release work.
+
+The application contains both engine modules, SDL3, DXVK, Vulkan/MoltenVK and their required libraries. No Homebrew installation is needed to run a complete bundle.
+
+## First launch
+
+Select the Generals and Zero Hour data directories when prompted. Echelon imports explicitly selected game assets into `$HOME/.Echelon/Generals` and `$HOME/.Echelon/GeneralsZH`. Canceling selection leaves the corresponding game disabled.
+
+Settings and saves are separate for the two games under `.Echelon/UserData`. Existing Arsenal and GeneralsX application directories are not inspected or migrated automatically. This is a clean installation.
+
+Use **MODS** to import local archives or folders. Online mod catalog services are retired; see the [launcher guide](ECHELON_LAUNCHER.md) for local content, settings and profiles.
