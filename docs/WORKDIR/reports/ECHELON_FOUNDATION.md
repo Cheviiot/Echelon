@@ -93,6 +93,7 @@ All log names below refer to the ignored local `logs/` directory. No retail asse
 | Two pre-existing local replays | FAIL: Generals exits 1; Zero Hour reports frame-0 CRC mismatch. Standalone binaries reproduce the same outcomes and the same ZH CRC. |
 | Six public upstream Zero Hour captures | FAIL: all report frame-0 CRC mismatches with the available local retail data; `echelon-upstream-replay-*.log` |
 | macOS execution, bundle closure and cross-platform CRC | NOT RUN: no macOS host available. Packager Python/shell and workflow YAML pass static syntax checks. |
+| Synthetic next-upstream merge | PASS on relocation commit `a3b91d86f`: edits to upstream README/Core, a new root file and a deletion all map into `GeneralsX/`; product tree unchanged. `echelon-upstream-sync-probe.log` |
 | Workspace registry and saved Codex paths | PASS, 20 projects, no errors |
 
 Public replay fixtures came from `fbraz3/GeneralsXReplays` at `d00070157d1e8cd911927eca7499aed29dda0118`. They include Linux/macOS captures and their custom maps. The results do not establish whether differences originate in game data, capture version or shared engine code; the identical local standalone failure only narrows the host-specific hypothesis. **Replay compatibility and cross-platform determinism remain unverified.** A matched asset manifest and capture-engine baseline are needed before declaring those gates passed. No CRC check has been weakened.

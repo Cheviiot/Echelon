@@ -14,6 +14,8 @@ git log --oneline HEAD..upstream/main
 git merge --no-ff --no-commit -Xsubtree=GeneralsX upstream/main
 ```
 
+The synthetic edit/add/delete check passed on the relocated history. Run `python3 scripts/qa/check-echelon-upstream-sync.py` after structural changes to revalidate the mapping without changing the working tree.
+
 The subtree merge option maps the upstream root into `GeneralsX/`. Review `git status` and the entire staged diff before committing. All upstream engine paths must stay inside that prefix; Echelon's root CMake, launcher, integration, brand, packaging and workflow files must remain intact. If Git cannot map the historical base correctly, abort the merge and investigate the tree mapping rather than accepting misplaced files.
 
 ## Ownership and conflict resolution

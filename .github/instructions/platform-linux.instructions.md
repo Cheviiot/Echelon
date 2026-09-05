@@ -29,4 +29,3 @@ Use `scripts/qa/smoke/test-echelon-*.sh` with explicitly selected retail fixture
 - **No native POSIX calls**: use SDL3 abstractions for timers, threads, file I/O. No raw `pthread_*`, `open()`.
 - **`-logToCon`**: only available in debug builds (`RTS_BUILD_OPTION_DEBUG=ON`).
 - **Diagnostics**: prefer `fprintf(stderr, ...)` probes; capture stderr and grep targeted markers.
-
