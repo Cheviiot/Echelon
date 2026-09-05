@@ -92,7 +92,9 @@ All log names below refer to the ignored local `logs/` directory. No retail asse
 | Wayland explicit-sync protocol lifetime | SKIP: the test compositor does not advertise this protocol. The check still fails if the protocol is advertised but unused or its surfaces are unbalanced. |
 | Two pre-existing local replays | FAIL: Generals exits 1; Zero Hour reports frame-0 CRC mismatch. Standalone binaries reproduce the same outcomes and the same ZH CRC. |
 | Six public upstream Zero Hour captures | FAIL: all report frame-0 CRC mismatches with the available local retail data; `echelon-upstream-replay-*.log` |
-| macOS execution, bundle closure and cross-platform CRC | NOT RUN: no macOS host available. Packager Python/shell and workflow YAML pass static syntax checks. |
+| macOS product/standalone compilation and local-content tests | PASS in CI 33970289484. |
+| macOS bundle closure after dylib-identity correction | PENDING: the preceding run rejected conflicting SDL copies; the owner deferred further validation and authorized immediate merge. |
+| macOS gameplay and cross-platform CRC | NOT RUN: no macOS gameplay host available. |
 | Synthetic next-upstream merge | PASS on relocation commit `a3b91d86f`: edits to upstream README/Core, a new root file and a deletion all map into `GeneralsX/`; product tree unchanged. `echelon-upstream-sync-probe.log` |
 | Workspace registry and saved Codex paths | PASS, 20 projects, no errors |
 
@@ -123,3 +125,5 @@ CI 33967112215 passed Linux Flatpak, both Windows targets and both standalone ma
 CI 33968601862 passed all compilation targets and macOS local-content tests. Application packaging then rejected a second SDL3 from Homebrew, which DXVK had discovered separately. DXVK now receives a private generated pkg-config description of the exact CMake SDL3 target and waits for that library before configuring; stale Meson dependency caches are cleared. The conflict guard remains enabled. A local CMake/Meson fixture with a conflicting system package confirms selection and runtime use of the intended SDL library (`echelon-sdl-bridge-check.log`).
 
 The macOS packager also distinguishes `LC_ID_DYLIB` (the current library identity) from load dependencies. It no longer searches system paths for a dylib itself. Portable recorded-output regressions cover both dylib identities and executable/module dependencies; actual dependency traversal and conflicting-library rejection remain enforced.
+
+On 2026-09-06 the owner explicitly authorized immediate merge without additional checks. The final dylib-identity correction has two passing portable regressions; macOS application packaging must be revalidated in later work. No release is being published.
