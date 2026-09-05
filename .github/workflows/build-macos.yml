@@ -398,6 +398,7 @@ jobs:
         if: matrix.game.id == 'echelon'
         run: |
           set -o pipefail
+          python3 scripts/qa/test-macos-bundle-dependencies.py
           cmake --build build/${{ inputs.preset }} --target echelon_settings_tests -j 3
           ctest --test-dir build/${{ inputs.preset }} -R echelon_local_content --output-on-failure
           ./scripts/build/macos/bundle-macos-echelon.sh ${{ inputs.preset }} 2>&1 | tee logs/bundle-echelon.log

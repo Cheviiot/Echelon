@@ -6,6 +6,7 @@ Run product commands from the repository root. Original engine tools are preserv
 - `build/macos/bundle-macos-echelon.sh`: package and ad-hoc sign one Echelon.app, checking the complete dylib dependency set.
 - `assets/render-brand.sh`: regenerate PNGs from the editable SVG identity masters.
 - `qa/check-echelon-upstream-sync.py`: verify incoming edit/add/delete mapping with synthetic Git trees.
+- `qa/test-macos-bundle-dependencies.py`: verify Mach-O dependency classification without a macOS host.
 - `qa/check-echelon-boundaries.py`: verify identity, source layout, compile flags and module exports.
 - `qa/smoke/test-echelon-*.sh`: isolated local-content, transport, headless, Wayland lifecycle and recovery checks.
 

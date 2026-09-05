@@ -20,7 +20,15 @@ def system_library(name):
 
 
 def dependencies(binary):
-    return [line.strip().split(" (", 1)[0] for line in run("otool", "-L", str(binary)).splitlines()[1:]]
+    # otool -L includes LC_ID_DYLIB, which identifies this file rather than a dependency.
+    # Resolving that name through system search paths can substitute an unrelated installed copy.
+    commands = run("otool", "-l", str(binary)).splitlines()
+    identities = {
+        commands[index + 2].strip().split(" (", 1)[0].removeprefix("name ")
+        for index, line in enumerate(commands) if line.strip() == "cmd LC_ID_DYLIB"
+    }
+    names = [line.strip().split(" (", 1)[0] for line in run("otool", "-L", str(binary)).splitlines()[1:]]
+    return [name for name in names if name not in identities]
 
 
 def rpaths(binary):
