@@ -116,7 +116,7 @@ Test both profiles, local content precedence and verification, repeated engine s
 ## Branching & Sync
 ### GeneralsX upstream sync
 
-The active product upstream is `fbraz3/GeneralsX` (`upstream`). Preserve history and integrate pinned commits on a `codex/` review branch. Follow [the sync guide](docs/HOWTO/SYNC_GENERALSX_UPSTREAM.md) and [ownership map](docs/WORKDIR/reports/ECHELON_FOUNDATION.md).
+The active product upstream is `fbraz3/GeneralsX` (remote `upstream`). The two permanent repository branches are `main` (Echelon product) and `upstream` (locked, exact original history). Never commit product changes to `origin/upstream`; it retains the original root layout, while the product branch integrates the engine under `GeneralsX/`. Preserve history and integrate pinned commits on a `codex/` review branch. Follow [the sync guide](docs/HOWTO/SYNC_GENERALSX_UPSTREAM.md) and [ownership map](docs/WORKDIR/reports/ECHELON_FOUNDATION.md).
 
 - Review conflicts by behavior; do not apply directory-wide ours/theirs rules.
 - Keep the shared engine layout close to upstream. Product code lives in `Launcher/`, the host bridge in `EngineIntegration/`.

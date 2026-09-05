@@ -2,6 +2,15 @@
 
 The product is maintained in the root of the Echelon repository. The integrated engine is an ordinary tracked `GeneralsX/` directory. Do not create a GeneralsX submodule, clone over this directory, or rewrite published history.
 
+## Two permanent branches
+
+- `origin/main`: Echelon, with our sources at the root and the integrated engine under `GeneralsX/`.
+- `origin/upstream`: exact original GeneralsX history and layout, without any Echelon commits. This branch is locked against pushes, force pushes and deletion; GitHub fork syncing is enabled.
+
+The remote named `upstream` points to `fbraz3/GeneralsX`; it is distinct from the branch `origin/upstream`. Use full remote-tracking ref names when comparing them.
+
+Refresh the clean branch only from original GeneralsX commits. Before an update, verify that its current tip is an ancestor of the intended original revision. Afterward, verify SHA equality with the selected original commit; do not create a merge commit, patch, metadata commit or force push in the clean branch. If GitHub fork syncing cannot map the original source branch, stop and inspect the mapping instead of unlocking the branch or merging product code into it.
+
 ## Review a pinned update
 
 Start from a clean working tree with all existing development preserved in commits. Verify the remotes, fetch the upstream history, and record the exact incoming SHA and range:
@@ -9,10 +18,16 @@ Start from a clean working tree with all existing development preserved in commi
 ```bash
 git remote -v
 git fetch upstream main
-git switch -c codex/upstream-sync-YYYY-MM-DD
-git log --oneline HEAD..upstream/main
-git merge --no-ff --no-commit -Xsubtree=GeneralsX upstream/main
+git fetch origin main upstream
+# Verify the clean mirror matches the chosen original revision.
+git rev-parse refs/remotes/upstream/main refs/remotes/origin/upstream
+# Start only after the Echelon foundation has been merged into origin/main.
+git switch -c codex/upstream-sync-YYYY-MM-DD origin/main
+git log --oneline HEAD..refs/remotes/origin/upstream
+git merge --no-ff --no-commit -Xsubtree=GeneralsX refs/remotes/origin/upstream
 ```
+
+If the displayed SHAs differ, first review and complete the clean mirror refresh. The product integration must name the verified mirror revision.
 
 The synthetic edit/add/delete check passed on the relocated history. Run `python3 scripts/qa/check-echelon-upstream-sync.py` after structural changes to revalidate the mapping without changing the working tree.
 

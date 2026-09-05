@@ -33,6 +33,8 @@ GeneralsX/         Upstream engine, libraries, tools and historical docs
 
 `GeneralsX/` is not a submodule. Engine fixes remain tracked in this repository; future upstream merges use the directory prefix. The historical DXVK reference inside it retains its existing submodule registration.
 
+The two permanent branches are `main` for Echelon and [`upstream`](https://github.com/Cheviiot/Echelon/tree/upstream) for a locked, exact copy of the original GeneralsX history and layout. The clean branch has no Echelon modifications; see [the branch policy](UPSTREAM.md#permanent-branches).
+
 ## Command line
 
 Show the selector:
