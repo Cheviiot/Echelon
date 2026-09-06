@@ -36,6 +36,7 @@
 #include "Common/GameEngine.h"
 #include "Common/GameState.h"
 #include "Common/GlobalData.h"
+#include "LauncherIntegration/EngineModuleAPI.h"
 #include "Common/NameKeyGenerator.h"
 #include "Common/RandomValue.h"
 #include "Common/OptionPreferences.h"
@@ -571,7 +572,13 @@ static void initLauncherReturnButton()
 	launcherReturnButton->winSetDisabledTextColors(buttonExit->winGetDisabledTextColor(), buttonExit->winGetDisabledTextBorderColor());
 	launcherReturnButton->winSetHiliteTextColors(buttonExit->winGetHiliteTextColor(), buttonExit->winGetHiliteTextBorderColor());
 
-	const char *language = std::getenv("ECHELON_UI_LANGUAGE");
+	// Echelon @refactor Codex 07/09/2026 Prefer the hosted session language over process environment state.
+#if defined(ECHELON_ENGINE_HOSTED)
+	const char *language = EchelonGetHostedUiLanguage();
+#else
+	const char *language = nullptr;
+#endif
+	if (!language || !language[0]) language = std::getenv("ECHELON_UI_LANGUAGE");
 	if (!language || !language[0]) language = std::getenv("LC_ALL");
 	if (!language || !language[0]) language = std::getenv("LC_MESSAGES");
 	if (!language || !language[0]) language = std::getenv("LANG");

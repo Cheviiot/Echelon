@@ -13,6 +13,10 @@
 #include <cstdlib>
 #include <cstring>
 
+#if defined(ECHELON_ENGINE_HOSTED) && defined(ECHELON_ENGINE_MODULE_ALLOCATOR)
+#include "LauncherIntegration/EngineModuleAPI.h"
+#endif
+
 namespace EchelonArchivePolicy
 {
 
@@ -46,7 +50,13 @@ inline bool EqualsTokenIgnoreCase(const char *value, const char *token, size_t t
 inline bool IsArchiveDisabled(const char *path)
 {
 #if defined(ECHELON_ENGINE_HOSTED)
+	// Echelon @refactor Codex 07/09/2026 Resolve hosted archive policy through the session context first.
+#if defined(ECHELON_ENGINE_MODULE_ALLOCATOR)
+	const char *policy = EchelonGetHostedDisabledBigFiles();
+	if (!policy || !policy[0]) policy = ::getenv("ECHELON_DISABLED_BIG_FILES");
+#else
 	const char *policy = ::getenv("ECHELON_DISABLED_BIG_FILES");
+#endif
 	if (!policy || !policy[0]) return false;
 	const char *name = BaseName(path);
 	const char *cursor = policy;

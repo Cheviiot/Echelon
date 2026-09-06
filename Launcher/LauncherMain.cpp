@@ -1917,24 +1917,26 @@ EchelonEngineResultV2 RunProfile(LauncherProfile &profile, SDL_Window *window, c
 	std::vector<char *> argumentPointers;
 	argumentPointers.reserve(arguments.size());
 	for (std::string &argument : arguments) argumentPointers.push_back(argument.data());
+	const bool useRussianLocalization = headless || profileSettings.russianLocalization;
+	const std::string disabledBigFiles = useRussianLocalization ? std::string() :
+		(profile.engine == kZeroHourProfileId ?
+			std::string("00Russia.big;00Russian.big;00RussiaZH.big;00RussianZH.big") :
+			std::string("00Russia.big;00Russian.big"));
+	const std::string uiLanguage = profile.hasRussianLocalization && useRussianLocalization ? "ru" : "en";
 
 	ScopedEnvironment sessionEnvironment({
 		"CNC_GENERALS_INSTALLPATH", "CNC_GENERALS_PATH", "CNC_GENERALS_ZH_PATH",
 		"ECHELON_USER_DATA_ROOT", "ECHELON_DISABLED_BIG_FILES", "ECHELON_UI_LANGUAGE"});
-	SetEnvironment("CNC_GENERALS_INSTALLPATH", profile.assetRoot.string());
-	SetEnvironment("CNC_GENERALS_PATH", profile.baseAssetRoot.string());
-	if (profile.engine == kZeroHourProfileId) SetEnvironment("CNC_GENERALS_ZH_PATH", profile.assetRoot.string());
-	else ClearEnvironment("CNC_GENERALS_ZH_PATH");
-	SetEnvironment("ECHELON_USER_DATA_ROOT", profile.userDataRoot.string());
-	const bool useRussianLocalization = headless || profileSettings.russianLocalization;
-	if (!useRussianLocalization) {
-		SetEnvironment("ECHELON_DISABLED_BIG_FILES", profile.engine == kZeroHourProfileId ?
-			"00Russia.big;00Russian.big;00RussiaZH.big;00RussianZH.big" : "00Russia.big;00Russian.big");
-	} else {
-		SetEnvironment("ECHELON_DISABLED_BIG_FILES", "");
+	if (!module->apiV3) {
+		// Echelon @refactor Codex 07/09/2026 Restrict process environment mutation to the legacy V2 bridge.
+		SetEnvironment("CNC_GENERALS_INSTALLPATH", profile.assetRoot.string());
+		SetEnvironment("CNC_GENERALS_PATH", profile.baseAssetRoot.string());
+		if (profile.engine == kZeroHourProfileId) SetEnvironment("CNC_GENERALS_ZH_PATH", profile.assetRoot.string());
+		else ClearEnvironment("CNC_GENERALS_ZH_PATH");
+		SetEnvironment("ECHELON_USER_DATA_ROOT", profile.userDataRoot.string());
+		SetEnvironment("ECHELON_DISABLED_BIG_FILES", disabledBigFiles);
+		SetEnvironment("ECHELON_UI_LANGUAGE", uiLanguage);
 	}
-	SetEnvironment("ECHELON_UI_LANGUAGE",
-		profile.hasRussianLocalization && useRussianLocalization ? "ru" : "en");
 
 	// Echelon @refactor Codex 07/09/2026 ABI V3 receives explicit asset roots and no longer depends on a process-wide cwd.
 	// ABI V2 keeps the cwd bridge because the legacy GameMain path still resolves a few relative files directly.
@@ -1998,6 +2000,9 @@ EchelonEngineResultV2 RunProfile(LauncherProfile &profile, SDL_Window *window, c
 		host.content_layer_count = static_cast<uint32_t>(hostContentLayers.size());
 		host.content_stack_fingerprint = contentStack->fingerprint.c_str();
 	}
+	// Echelon @feature Codex 07/09/2026 Pass hosted policy through the ABI payload so V3 needs no process-wide env state.
+	host.disabled_big_files = disabledBigFiles.c_str();
+	host.ui_language = uiLanguage.c_str();
 	fprintf(stderr, "[CONTENT-STACK] engine=%s layers=%u fingerprint=%s\n", profile.engine.c_str(),
 		host.content_layer_count, host.content_stack_fingerprint ? host.content_stack_fingerprint : "vanilla");
 	fflush(stderr);

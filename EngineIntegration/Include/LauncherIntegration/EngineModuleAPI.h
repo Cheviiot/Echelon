@@ -127,6 +127,9 @@ typedef struct EchelonEngineHostV2
 	const EchelonContentLayerV1 *content_layers;
 	uint32_t content_layer_count;
 	const char *content_stack_fingerprint;
+	// Echelon @feature Codex 07/09/2026 Optional hosted policy fields are appended for V3 without moving V2 members.
+	const char *disabled_big_files;
+	const char *ui_language;
 } EchelonEngineHostV2;
 
 // Echelon @feature Codex 06/09/2026 Keep the V3 host payload source-compatible while versioning the session contract.
@@ -216,4 +219,10 @@ ECHELON_ENGINE_EXPORT const EchelonEngineModuleV3 *Echelon_GetEngineModuleV3(voi
 void EchelonRequestReturnToLauncher();
 bool EchelonIsLauncherSession();
 bool EchelonConsumeTestReturnRequest();
+// Echelon @feature Codex 07/09/2026 Let hosted engine subsystems consume explicit paths without process environment state.
+const char *EchelonGetHostedAssetRoot();
+const char *EchelonGetHostedBaseAssetRoot();
+const char *EchelonGetHostedUserDataRoot();
+const char *EchelonGetHostedDisabledBigFiles();
+const char *EchelonGetHostedUiLanguage();
 #endif

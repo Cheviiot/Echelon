@@ -1,11 +1,48 @@
 // Echelon @refactor Codex 05/09/2026 Shared hosted lifecycle included by each SDL entry point.
 // GeneralsX @feature Codex 11/08/2026 Keep legacy memory pools alive across launcher sessions.
 #include <new>
+#include <cstddef>
 #include <string>
 
 #include "Common/ReplaySimulation.h"
 
 static bool s_echelonModuleInitialized = false;
+static std::string s_echelonHostedAssetRoot;
+static std::string s_echelonHostedBaseAssetRoot;
+static std::string s_echelonHostedUserDataRoot;
+static std::string s_echelonHostedDisabledBigFiles;
+static std::string s_echelonHostedUiLanguage;
+
+static void EchelonSetHostedRuntimeContext(const EchelonEngineHostV2 *host,
+	const char *disabledBigFiles = nullptr, const char *uiLanguage = nullptr)
+{
+	s_echelonHostedAssetRoot = host && host->asset_root ? host->asset_root : "";
+	s_echelonHostedBaseAssetRoot = host && host->base_asset_root ? host->base_asset_root : "";
+	s_echelonHostedUserDataRoot = host && host->user_data_root ? host->user_data_root : "";
+	if (host && host->struct_size >= offsetof(EchelonEngineHostV2, disabled_big_files) + sizeof(host->disabled_big_files)) {
+		if (!disabledBigFiles) disabledBigFiles = host->disabled_big_files;
+		if (!uiLanguage && host->struct_size >= offsetof(EchelonEngineHostV2, ui_language) + sizeof(host->ui_language)) {
+			uiLanguage = host->ui_language;
+		}
+	}
+	s_echelonHostedDisabledBigFiles = disabledBigFiles ? disabledBigFiles : "";
+	s_echelonHostedUiLanguage = uiLanguage ? uiLanguage : "";
+}
+
+static void EchelonClearHostedRuntimeContext()
+{
+	s_echelonHostedAssetRoot.clear();
+	s_echelonHostedBaseAssetRoot.clear();
+	s_echelonHostedUserDataRoot.clear();
+	s_echelonHostedDisabledBigFiles.clear();
+	s_echelonHostedUiLanguage.clear();
+}
+
+const char *EchelonGetHostedAssetRoot() { return s_echelonHostedAssetRoot.c_str(); }
+const char *EchelonGetHostedBaseAssetRoot() { return s_echelonHostedBaseAssetRoot.c_str(); }
+const char *EchelonGetHostedUserDataRoot() { return s_echelonHostedUserDataRoot.c_str(); }
+const char *EchelonGetHostedDisabledBigFiles() { return s_echelonHostedDisabledBigFiles.c_str(); }
+const char *EchelonGetHostedUiLanguage() { return s_echelonHostedUiLanguage.c_str(); }
 
 static void EchelonModuleLog(const EchelonEngineHostV2 *host, const char *message)
 {
@@ -81,7 +118,7 @@ static bool EchelonRequestWindowMode(void *userData, bool windowed, int renderWi
 
 static EchelonEngineResultV2 EchelonModuleRun(const EchelonEngineHostV2 *host)
 {
-	if (!host || host->struct_size < sizeof(EchelonEngineHostV2) ||
+	if (!host || host->struct_size < offsetof(EchelonEngineHostV2, disabled_big_files) ||
 		(host->abi_version != ECHELON_ENGINE_ABI_VERSION && host->abi_version != ECHELON_ENGINE_ABI_VERSION_V3)) {
 		return ECHELON_ENGINE_FATAL_ERROR;
 	}
@@ -94,6 +131,7 @@ static EchelonEngineResultV2 EchelonModuleRun(const EchelonEngineHostV2 *host)
 			EchelonModulePhase(host, ECHELON_ENGINE_PHASE_FAILED, "Engine content stack validation failed");
 			return ECHELON_ENGINE_FATAL_ERROR;
 		}
+		EchelonSetHostedRuntimeContext(host);
 		if (!EchelonModuleInitialize(host)) {
 			EchelonContentRuntime::Clear();
 			EchelonModulePhase(host, ECHELON_ENGINE_PHASE_FAILED, "Engine module initialization failed");
@@ -107,7 +145,7 @@ static EchelonEngineResultV2 EchelonModuleRun(const EchelonEngineHostV2 *host)
 		s_echelonLauncherSession = host->headless == 0;
 		// Echelon @feature Codex 14/08/2026 Honor the host-owned window contract before any WW3D/DXVK initialization can resize it.
 		DX8Wrapper::Set_Window_Geometry_Externally_Owned(
-			host->struct_size >= sizeof(EchelonEngineHostV2) &&
+			host->struct_size >= offsetof(EchelonEngineHostV2, window_policy) + sizeof(host->window_policy) &&
 			host->window_policy == ECHELON_ENGINE_WINDOW_POLICY_HOST_OWNED);
 		DX8Wrapper::Set_Window_Mode_Request_Callback(
 			DX8Wrapper::Is_Window_Geometry_Externally_Owned() ? EchelonRequestWindowMode : nullptr,
@@ -145,6 +183,7 @@ static EchelonEngineResultV2 EchelonModuleRun(const EchelonEngineHostV2 *host)
 		DX8Wrapper::Set_Window_Geometry_Externally_Owned(false);
 		s_echelonTestReturnUpdates = 0;
 		EchelonContentRuntime::Clear();
+		EchelonClearHostedRuntimeContext();
 		s_echelonQuiescenceFlags = EchelonCollectQuiescenceFlags();
 		if ((s_echelonQuiescenceFlags & ECHELON_ENGINE_REQUIRED_QUIESCENCE_FLAGS) !=
 			ECHELON_ENGINE_REQUIRED_QUIESCENCE_FLAGS) {
@@ -173,6 +212,7 @@ static EchelonEngineResultV2 EchelonModuleRun(const EchelonEngineHostV2 *host)
 	DX8Wrapper::Set_Window_Geometry_Externally_Owned(false);
 	s_echelonTestReturnUpdates = 0;
 	EchelonContentRuntime::Clear();
+	EchelonClearHostedRuntimeContext();
 	s_echelonQuiescenceFlags = EchelonCollectQuiescenceFlags();
 	EchelonModulePhase(host, ECHELON_ENGINE_PHASE_FAILED, "Engine session failed");
 	return ECHELON_ENGINE_FATAL_ERROR;
@@ -217,6 +257,7 @@ static EchelonEngineSessionV3 *EchelonModuleCreateSession(const EchelonEngineHos
 // Echelon @feature Codex 07/09/2026 Split the hosted engine bootstrap from GameMain so V3 can own one frame at a time.
 static void EchelonConfigureHostedRuntime(const EchelonEngineHostV2 *host)
 {
+	EchelonSetHostedRuntimeContext(host);
 	__argc = host->argc;
 	__argv = host->argv;
 	TheSDL3Window = static_cast<SDL_Window *>(host->sdl_window);
@@ -231,22 +272,7 @@ static void EchelonConfigureHostedRuntime(const EchelonEngineHostV2 *host)
 	s_echelonTestReturnUpdates = host->internal_test_return_after_updates;
 	s_echelonQuiescenceFlags = 0;
 
-	if (host->asset_root && host->asset_root[0]) {
-		setenv("CNC_GENERALS_INSTALLPATH", host->asset_root, 1);
-#if RTS_GENERALS
-		setenv("CNC_GENERALS_PATH", host->asset_root, 1);
-#else
-		setenv("CNC_GENERALS_ZH_PATH", host->asset_root, 1);
-#endif
-	}
-#if !RTS_GENERALS
-	if (host->base_asset_root && host->base_asset_root[0]) {
-		setenv("CNC_GENERALS_PATH", host->base_asset_root, 1);
-	}
-#endif
-	if (host->user_data_root && host->user_data_root[0]) {
-		setenv("ECHELON_USER_DATA_ROOT", host->user_data_root, 1);
-	}
+	// Echelon @refactor Codex 07/09/2026 Native V3 consumes explicit host paths; legacy V2 keeps its env bridge above.
 	CommandLine::parseCommandLineForStartup();
 }
 
@@ -258,6 +284,7 @@ static void EchelonResetHostedRuntime()
 	DX8Wrapper::Set_Window_Mode_Request_Callback(nullptr, nullptr);
 	DX8Wrapper::Set_Window_Geometry_Externally_Owned(false);
 	s_echelonTestReturnUpdates = 0;
+	EchelonClearHostedRuntimeContext();
 }
 
 static bool EchelonStartNativeGame(const EchelonEngineHostV3 *host, std::string &errorMessage)

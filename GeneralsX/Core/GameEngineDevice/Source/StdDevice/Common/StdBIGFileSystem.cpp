@@ -36,6 +36,7 @@
 #include "Common/Registry.h"
 #include "LauncherIntegration/ArchiveLoadPolicy.h"
 #include "LauncherIntegration/ContentLayerRuntime.h"
+#include "LauncherIntegration/EngineModuleAPI.h"
 
 #include "StdDevice/Common/StdBIGFile.h"
 #include "StdDevice/Common/StdBIGFileSystem.h"
@@ -326,6 +327,20 @@ static Bool loadPrimaryGameAssets(TBigFileSystem* fileSystem, AsciiString* loade
 	AsciiString exeDirectory;
 	getExecutableDirectory(exeDirectory);
 
+#if defined(ECHELON_ENGINE_HOSTED)
+	// Echelon @refactor Codex 07/09/2026 Prefer the launcher-owned asset root over process environment state.
+	const char *hostedAssetRoot = EchelonGetHostedAssetRoot();
+	AsciiString sanitizedHostedAssetPath;
+	if (sanitizeConfiguredPath(hostedAssetRoot, sanitizedHostedAssetPath)) {
+		fprintf(stderr, "[ASSET_ROOT] Trying hosted path='%s'\n", sanitizedHostedAssetPath.str());
+		if (tryLoadBigFiles(fileSystem, sanitizedHostedAssetPath, "hosted")) {
+			fprintf(stderr, "[ASSET_ROOT] Selected source=hosted path='%s'\n", sanitizedHostedAssetPath.str());
+			if (loadedDirectory != nullptr) *loadedDirectory = sanitizedHostedAssetPath;
+			return TRUE;
+		}
+	}
+#endif
+
 	// GeneralsX @feature GitHubCopilot 16/03/2026 Resolve primary asset directory by ENV > INI > default > current.
 #if RTS_ZEROHOUR
 	const char* primaryEnvName = kPrimaryAssetEnvZH;
@@ -432,6 +447,15 @@ static Bool loadPrimaryGameAssets(TBigFileSystem* fileSystem, AsciiString* loade
 template <typename TBigFileSystem>
 static void loadBaseGeneralsAssetsForZH(TBigFileSystem* fileSystem, const AsciiString& zhAssetDirectory)
 {
+	// Echelon @refactor Codex 07/09/2026 Resolve the base Generals layer from the hosted session context first.
+#if defined(ECHELON_ENGINE_HOSTED)
+	const char *hostedBaseAssetRoot = EchelonGetHostedBaseAssetRoot();
+	if (hostedBaseAssetRoot && hostedBaseAssetRoot[0] &&
+		tryLoadBigFiles(fileSystem, AsciiString(hostedBaseAssetRoot), "hosted-generals")) {
+		return;
+	}
+#endif
+
 	// GeneralsX @feature GitHubCopilot 16/03/2026 Resolve base Generals asset directory for ZH by ENV > INI > default.
 	const char* baseEnvValue = getenv(kBaseGeneralsAssetEnv);
 	if (baseEnvValue != nullptr && baseEnvValue[0] != '\0') {

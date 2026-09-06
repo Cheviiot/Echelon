@@ -39,6 +39,7 @@
 #include "WW3D2/texturefilter.h"
 
 #include "Common/GlobalData.h"
+#include "LauncherIntegration/EngineModuleAPI.h"
 
 #define DEFINE_TERRAIN_LOD_NAMES
 #define DEFINE_TIME_OF_DAY_NAMES
@@ -1342,8 +1343,10 @@ UnsignedInt GlobalData::generateExeCRC()
 AsciiString GlobalData::BuildUserDataPathFromIni()
 {
 #if defined(ECHELON_ENGINE_HOSTED)
-	// Echelon @feature Codex 05/09/2026 Only hosted engines consume the launcher's user-data path.
-	if (const char *root = getenv("ECHELON_USER_DATA_ROOT")) {
+	// Echelon @refactor Codex 07/09/2026 Read the hosted user-data root from the session context.
+	const char *root = EchelonGetHostedUserDataRoot();
+	if (!root || !root[0]) root = getenv("ECHELON_USER_DATA_ROOT");
+	if (root) {
 		if (root[0]) {
 			std::filesystem::path path = std::filesystem::path(root) / "";
 			std::filesystem::create_directories(path);

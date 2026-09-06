@@ -30,6 +30,7 @@
 
 #include "Common/Registry.h"
 #include "WWLib/registryini.h"
+#include "LauncherIntegration/EngineModuleAPI.h"
 
 #include <ctype.h>
 #include <stdlib.h>
@@ -142,7 +143,17 @@ static Bool tryAutoDetectLanguage(AsciiString& val)
 		{ nullptr,           nullptr     }
 	};
 
+	// Echelon @refactor Codex 07/09/2026 Prefer explicit hosted roots before legacy registry bridges.
+#if defined(ECHELON_ENGINE_HOSTED)
+	const char *hostedAssetRoot = EchelonGetHostedAssetRoot();
+	const char *hostedBaseAssetRoot = EchelonGetHostedBaseAssetRoot();
+#else
+	const char *hostedAssetRoot = nullptr;
+	const char *hostedBaseAssetRoot = nullptr;
+#endif
 	const char* searchRoots[] = {
+		hostedAssetRoot,
+		hostedBaseAssetRoot,
 		getenv("CNC_GENERALS_ZH_PATH"),
 		getenv("CNC_GENERALS_PATH"),
 		getenv("CNC_ZH_INSTALLPATH"),
@@ -533,4 +544,3 @@ UnsignedInt GetRegistryMapPackVersion()
 	GetUnsignedIntFromRegistry("", "MapPackVersion", val);
 	return val;
 }
-
