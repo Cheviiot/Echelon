@@ -28,6 +28,15 @@
 #include <unordered_set>
 #include <vector>
 
+#if defined(_WIN32)
+#include <process.h>
+#include <windows.h>
+#else
+#include <cerrno>
+#include <signal.h>
+#include <unistd.h>
+#endif
+
 namespace fs = std::filesystem;
 
 namespace EchelonLauncher
@@ -76,6 +85,40 @@ std::string Timestamp()
 	char buffer[32]{};
 	std::strftime(buffer, sizeof(buffer), "%Y%m%d-%H%M%S", &local);
 	return buffer;
+}
+
+uint64_t CurrentProcessIdForJournal()
+{
+#if defined(_WIN32)
+	return static_cast<uint64_t>(_getpid());
+#else
+	return static_cast<uint64_t>(getpid());
+#endif
+}
+
+bool OwnerProcessIsAliveForJournal(uint64_t processId)
+{
+	if (processId == 0) return false;
+#if defined(_WIN32)
+	HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, static_cast<DWORD>(processId));
+	if (!process) return GetLastError() == ERROR_ACCESS_DENIED;
+	DWORD exitCode = 0;
+	const bool alive = GetExitCodeProcess(process, &exitCode) && exitCode == STILL_ACTIVE;
+	CloseHandle(process);
+	return alive;
+#else
+	if (kill(static_cast<pid_t>(processId), 0) == 0) return true;
+	return errno == EPERM;
+#endif
+}
+
+bool IsExpiredOperation(const fs::path &path)
+{
+	std::error_code error;
+	const fs::file_time_type modified = fs::last_write_time(path, error);
+	if (error) return false;
+	const fs::file_time_type now = fs::file_time_type::clock::now();
+	return now > modified && now - modified > std::chrono::hours(24);
 }
 
 bool IsInsideRoot(const fs::path &candidate, const fs::path &root)
@@ -553,6 +596,43 @@ bool BuildContentIndex(const fs::path &root, std::string &fingerprint, std::stri
 	return !fingerprint.empty();
 }
 
+// Echelon @feature Codex 07/09/2026 Compare the typed manifest file list with the current content tree before publication.
+bool MatchesContentFileRecords(const fs::path &root, const std::string &indexText,
+	const std::vector<ContentFileRecord> &expected, std::string &errorMessage)
+{
+	if (expected.empty()) return true;
+	std::vector<ContentFileRecord> actual;
+	std::istringstream input(indexText);
+	std::string line;
+	while (std::getline(input, line)) {
+		const size_t separator = line.find("  ");
+		if (separator == std::string::npos) {
+			errorMessage = "Content file index is malformed";
+			return false;
+		}
+		const fs::path relative = fs::path(line.substr(separator + 2));
+		std::error_code error;
+		const uintmax_t size = fs::file_size(root / relative, error);
+		if (error) {
+			errorMessage = "Cannot read indexed content file size";
+			return false;
+		}
+		actual.push_back({relative.generic_string(), static_cast<uint64_t>(size), ToLower(line.substr(0, separator))});
+	}
+	if (actual.size() != expected.size()) {
+		errorMessage = "Content fingerprint does not match its manifest";
+		return false;
+	}
+	for (size_t index = 0; index < actual.size(); ++index) {
+		if (actual[index].relativePath != expected[index].relativePath ||
+			actual[index].size != expected[index].size || actual[index].sha256 != ToLower(expected[index].sha256)) {
+			errorMessage = "Content fingerprint does not match its manifest";
+			return false;
+		}
+	}
+	return true;
+}
+
 fs::path UniqueStagingPath(const fs::path &modsRoot)
 {
 	const std::string prefix = "import-" + Timestamp();
@@ -570,6 +650,9 @@ void RecordFailure(const fs::path &stagingRoot, const std::string &message)
 	if (stagingRoot.empty()) return;
 	std::ofstream output(stagingRoot / "operation.error", std::ios::trunc);
 	if (output) output << message << '\n';
+	// Echelon @refactor Codex 07/09/2026 Mark a returned operation as finished so recovery can distinguish it from a live owner.
+	std::ofstream journal(stagingRoot / "operation.ini", std::ios::app);
+	if (journal) journal << "State=failed\n";
 }
 
 std::unordered_map<std::string, std::string> ReadIniValues(const fs::path &path)
@@ -685,8 +768,9 @@ ModificationOperationResult ImportLocalModification(const LocalImportRequest &re
 	}
 	{
 		std::ofstream journal(stagingRoot / "operation.ini", std::ios::trunc);
-		journal << "[Operation]\nSchemaVersion=1\nState=importing\nInput=" << request.inputPath.string()
-			<< "\nEngine=" << request.engine << "\nType=" << ModificationTypeName(request.type) << '\n';
+		journal << "[Operation]\nSchemaVersion=1\nState=importing\nPid=" << CurrentProcessIdForJournal()
+			<< "\nInput=" << request.inputPath.string() << "\nEngine=" << request.engine
+			<< "\nType=" << ModificationTypeName(request.type) << '\n';
 	}
 	if (progress) {
 		progress->completedBytes.store(0, std::memory_order_relaxed);
@@ -857,15 +941,42 @@ ModificationRecoverySummary RecoverInterruptedModificationOperations(const fs::p
 		return summary;
 	}
 	std::vector<fs::path> interruptedImports;
+	std::vector<fs::path> interruptedWorkspaces;
 	for (fs::directory_iterator iterator(stagingRoot, fs::directory_options::skip_permission_denied, error), end;
 		!error && iterator != end; iterator.increment(error)) {
 		if (!iterator->is_directory(error)) continue;
 		const std::string name = iterator->path().filename().string();
 		if (name.rfind("import-", 0) == 0) interruptedImports.push_back(iterator->path());
+		else if (name.rfind("workspace-", 0) == 0 && IsExpiredOperation(iterator->path())) {
+			interruptedWorkspaces.push_back(iterator->path());
+		}
 	}
 	if (error) summary.warnings.push_back("Cannot scan interrupted modification imports: " + error.message());
 	error.clear();
 	for (const fs::path &interruptedImport : interruptedImports) {
+		const auto values = ReadIniValues(interruptedImport / "operation.ini");
+		const auto stateValue = values.find("state");
+		const std::string state = ToLower(stateValue != values.end() ? stateValue->second : std::string{});
+		const bool expired = IsExpiredOperation(interruptedImport);
+		uint64_t ownerPid = 0;
+		if (const auto owner = values.find("pid"); owner != values.end()) {
+			char *end = nullptr;
+			ownerPid = std::strtoull(owner->second.c_str(), &end, 10);
+			if (!end || *end != '\0') ownerPid = 0;
+		}
+		// Echelon @bugfix Codex 07/09/2026 Never trash a fresh operation owned by another process; age is the recovery authority.
+		if (state == "importing" && !expired) {
+			if (OwnerProcessIsAliveForJournal(ownerPid) || ownerPid == CurrentProcessIdForJournal()) {
+				summary.warnings.push_back("Active import was left in place: " + interruptedImport.string());
+			} else {
+				summary.warnings.push_back("Fresh import was left in place until it expires: " + interruptedImport.string());
+			}
+			continue;
+		}
+		if (state != "failed" && !expired) {
+			summary.warnings.push_back("Unexpired import was left in place: " + interruptedImport.string());
+			continue;
+		}
 		const std::string name = interruptedImport.filename().string();
 		fs::path preserved = trashRoot / ("interrupted-" + name);
 		for (unsigned suffix = 1; fs::exists(preserved, error) && suffix < 10000; ++suffix) {
@@ -875,6 +986,17 @@ ModificationRecoverySummary RecoverInterruptedModificationOperations(const fs::p
 		fs::rename(interruptedImport, preserved, error);
 		if (error) summary.warnings.push_back("Cannot preserve interrupted import " + name + ": " + error.message());
 		else ++summary.preservedInterruptedImports;
+	}
+	for (const fs::path &interruptedWorkspace : interruptedWorkspaces) {
+		const std::string name = interruptedWorkspace.filename().string();
+		fs::path preserved = trashRoot / ("interrupted-" + name);
+		for (unsigned suffix = 1; fs::exists(preserved, error) && suffix < 10000; ++suffix) {
+			preserved = trashRoot / ("interrupted-" + name + "-" + std::to_string(suffix));
+		}
+		error.clear();
+		fs::rename(interruptedWorkspace, preserved, error);
+		if (error) summary.warnings.push_back("Cannot preserve interrupted workspace " + name + ": " + error.message());
+		else ++summary.preservedInterruptedWorkspaces;
 	}
 	if (error) summary.warnings.push_back("Cannot finish modification recovery scan: " + error.message());
 	summary.resumableDownloads = CountTransferRoots(stagingRoot / "downloads", "download.ini");
@@ -1091,6 +1213,7 @@ bool VerifyInstalledModification(const InstalledModification &modification,
 	std::string fingerprint;
 	std::string indexText;
 	if (!BuildContentIndex(modification.launchPath, fingerprint, indexText, errorMessage, progress)) return false;
+	if (!MatchesContentFileRecords(modification.launchPath, indexText, modification.files, errorMessage)) return false;
 	if (!modification.contentFingerprint.empty() && fingerprint != ToLower(modification.contentFingerprint)) {
 		errorMessage = "Installed content fingerprint does not match its manifest";
 		return false;

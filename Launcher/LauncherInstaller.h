@@ -63,6 +63,7 @@ struct ModificationRecoverySummary
 	size_t resumableDownloads = 0;
 	size_t resumableS3Transfers = 0;
 	size_t preservedInterruptedImports = 0;
+	size_t preservedInterruptedWorkspaces = 0;
 	size_t recoverableTrashEntries = 0;
 	std::vector<std::string> warnings;
 };

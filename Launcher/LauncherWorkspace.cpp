@@ -391,28 +391,6 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 	}
 
 	std::error_code error;
-	targetError.clear();
-	const bool targetExists = fs::exists(target, targetError);
-	if (targetError) {
-		result.diagnostic.stage = OperationStage::Verify;
-		result.diagnostic.code = OperationErrorCode::FilesystemFailure;
-		result.diagnostic.retryable = true;
-		result.message = "Cannot inspect existing workspace: " + targetError.message();
-		return result;
-	}
-	if (targetExists || targetIsSymlink) {
-		const fs::path quarantine = modsRoot / ".trash" /
-			("workspace-invalid-" + SafeComponent(profileId) + "-" + std::to_string(Generation()));
-		fs::create_directories(quarantine.parent_path(), error);
-		if (!error) fs::rename(target, quarantine, error);
-		if (error) {
-			result.diagnostic.stage = OperationStage::Recover;
-			result.diagnostic.code = OperationErrorCode::FilesystemFailure;
-			result.diagnostic.retryable = true;
-			result.message = "Cannot quarantine invalid workspace: " + error.message();
-			return result;
-		}
-	}
 	fs::create_directories(target.parent_path(), error);
 	if (error) {
 		result.diagnostic.stage = OperationStage::Staging;
@@ -459,6 +437,38 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 		QuarantineWorkspaceStaging(modsRoot, staging, profileId);
 		return result;
 	}
+	// Echelon @refactor Codex 07/09/2026 Keep a valid published workspace active until replacement staging is complete.
+	// Quarantine the old generation only after its replacement has a complete record.
+	fs::path quarantine;
+	bool oldWorkspaceQuarantined = false;
+	targetError.clear();
+	const fs::file_status targetStatus = fs::symlink_status(target, targetError);
+	if (targetError == std::make_error_code(std::errc::no_such_file_or_directory)) targetError.clear();
+	if (targetError) {
+		result.diagnostic.stage = OperationStage::Recover;
+		result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+		result.diagnostic.retryable = true;
+		result.message = "Cannot inspect published workspace before replacement: " + targetError.message();
+		QuarantineWorkspaceStaging(modsRoot, staging, profileId);
+		return result;
+	}
+	const bool targetStillExists = targetStatus.type() != fs::file_type::not_found;
+	const bool targetStillSymlink = fs::is_symlink(targetStatus);
+	if (targetStillExists || targetStillSymlink) {
+		quarantine = modsRoot / ".trash" /
+			("workspace-invalid-" + SafeComponent(profileId) + "-" + std::to_string(Generation()));
+		fs::create_directories(quarantine.parent_path(), error);
+		if (!error) fs::rename(target, quarantine, error);
+		if (error) {
+			result.diagnostic.stage = OperationStage::Recover;
+			result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+			result.diagnostic.retryable = true;
+			result.message = "Cannot quarantine invalid workspace: " + error.message();
+			QuarantineWorkspaceStaging(modsRoot, staging, profileId);
+			return result;
+		}
+		oldWorkspaceQuarantined = true;
+	}
 	fs::rename(staging, target, error);
 	if (error) {
 		result.diagnostic.stage = OperationStage::Publish;
@@ -466,6 +476,15 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 		result.diagnostic.affectedPath = target;
 		result.diagnostic.retryable = true;
 		QuarantineWorkspaceStaging(modsRoot, staging, profileId);
+		if (oldWorkspaceQuarantined) {
+			std::error_code restoreError;
+			fs::rename(quarantine, target, restoreError);
+			if (restoreError) {
+				result.message = "Cannot publish workspace atomically: " + error.message() +
+					"; cannot restore previous workspace: " + restoreError.message();
+				return result;
+			}
+		}
 		result.message = "Cannot publish workspace atomically: " + error.message();
 		return result;
 	}

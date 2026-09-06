@@ -2293,10 +2293,12 @@ int main(int argc, char **argv)
 		fprintf(stderr, "WARNING: %s\n", warning.c_str());
 	}
 	if (modificationRecovery.resumableDownloads || modificationRecovery.resumableS3Transfers ||
-		modificationRecovery.preservedInterruptedImports || modificationRecovery.recoverableTrashEntries) {
-		fprintf(stderr, "[MOD-RECOVERY] http=%zu s3=%zu interrupted=%zu trash=%zu\n",
+		modificationRecovery.preservedInterruptedImports || modificationRecovery.preservedInterruptedWorkspaces ||
+		modificationRecovery.recoverableTrashEntries) {
+		fprintf(stderr, "[MOD-RECOVERY] http=%zu s3=%zu interrupted=%zu workspace=%zu trash=%zu\n",
 			modificationRecovery.resumableDownloads, modificationRecovery.resumableS3Transfers,
-			modificationRecovery.preservedInterruptedImports, modificationRecovery.recoverableTrashEntries);
+			modificationRecovery.preservedInterruptedImports, modificationRecovery.preservedInterruptedWorkspaces,
+			modificationRecovery.recoverableTrashEntries);
 		fflush(stderr);
 	}
 	std::vector<LauncherProfile> profiles = LoadProfiles(paths);

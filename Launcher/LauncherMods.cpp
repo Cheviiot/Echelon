@@ -247,6 +247,60 @@ bool ResolveOptionalPath(const fs::path &manifestDirectory, const std::string &r
 	return true;
 }
 
+// Echelon @feature Codex 07/09/2026 Load the immutable file list emitted beside imported content manifests.
+bool ReadContentFileRecords(const fs::path &versionRoot, const fs::path &contentRoot,
+	std::vector<ContentFileRecord> &files, std::string &warning)
+{
+	const fs::path indexPath = versionRoot / "files.sha256";
+	std::error_code error;
+	if (!fs::exists(indexPath, error)) {
+		if (error) warning = "Modification file index is unreadable: " + indexPath.string();
+		return !error;
+	}
+	if (fs::is_symlink(indexPath, error) || error || !fs::is_regular_file(indexPath, error)) {
+		warning = "Modification file index is unreadable: " + indexPath.string();
+		return false;
+	}
+	std::ifstream input(indexPath);
+	if (!input) {
+		warning = "Cannot read modification file index: " + indexPath.string();
+		return false;
+	}
+	std::string line;
+	while (std::getline(input, line)) {
+		if (line.empty()) continue;
+		if (line.size() > 4096 || files.size() >= kMaximumCatalogEntries) {
+			warning = "Modification file index is too large: " + indexPath.string();
+			return false;
+		}
+		const size_t separator = line.find("  ");
+		if (separator == std::string::npos) {
+			warning = "Modification file index has an invalid entry: " + indexPath.string();
+			return false;
+		}
+		const std::string digest = ToLower(Trim(line.substr(0, separator)));
+		const std::string relativeText = Trim(line.substr(separator + 2));
+		const fs::path relative(relativeText);
+		if (digest.size() != 64 || !IsHexDigest(digest) || relative.empty() || relative.is_absolute() ||
+			relative.has_root_name() || relative.has_root_directory() || relative.lexically_normal() != relative) {
+			warning = "Modification file index contains an unsafe entry: " + indexPath.string();
+			return false;
+		}
+		const fs::path candidate = fs::weakly_canonical(contentRoot / relative, error);
+		if (error || !IsInsideRoot(candidate, contentRoot) || !fs::is_regular_file(candidate, error) || error) {
+			warning = "Modification file index points outside content: " + indexPath.string();
+			return false;
+		}
+		const uintmax_t size = fs::file_size(candidate, error);
+		if (error) {
+			warning = "Cannot read modification file size: " + candidate.string();
+			return false;
+		}
+		files.push_back({relative.generic_string(), static_cast<uint64_t>(size), digest});
+	}
+	return true;
+}
+
 bool PublishMigratedManifest(const fs::path &legacyPath,
 	const std::unordered_map<std::string, std::string> &values, fs::path &publishedPath, std::string &warning)
 {
@@ -341,6 +395,7 @@ bool ReadManifest(const fs::path &inputPath, const fs::path &canonicalRoot,
 		warning = "Modification content root is missing or escapes its version directory: " + manifestPath.string();
 		return false;
 	}
+	if (!ReadContentFileRecords(manifestPath.parent_path(), modification.launchPath, modification.files, warning)) return false;
 	if (!ResolveOptionalPath(canonicalManifestDirectory, Value(values, "coverimage"), modification.coverImagePath, true)) {
 		warning = "Modification cover image escapes its version directory: " + manifestPath.string();
 		return false;

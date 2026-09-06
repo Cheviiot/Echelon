@@ -37,6 +37,12 @@
 #include <string>
 #include <vector>
 
+#if defined(_WIN32)
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 namespace fs = std::filesystem;
 using namespace EchelonLauncher;
 
@@ -50,6 +56,16 @@ void Check(bool condition, const char *message)
 	if (condition) return;
 	std::fprintf(stderr, "FAIL: %s\n", message);
 	++g_failures;
+}
+
+// Echelon @test Codex 07/09/2026 Use the current owner in recovery fixtures so live staging is never trashed.
+uint64_t TestProcessId()
+{
+#if defined(_WIN32)
+	return static_cast<uint64_t>(_getpid());
+#else
+	return static_cast<uint64_t>(getpid());
+#endif
 }
 
 bool CreateZipFixture(const fs::path &path, const std::string &entryName, const std::string &contents)
@@ -672,6 +688,9 @@ int main()
 	Check(imported && imported->requirements == importRequest.requirements &&
 		imported->conflicts == importRequest.conflicts && VerifyInstalledModification(*imported, message),
 		"installed local content must preserve compatibility metadata and pass deterministic SHA-256 verification");
+	Check(imported && !imported->files.empty() && imported->files.front().size > 0 &&
+		imported->files.front().sha256.size() == 64,
+		"content manifests must expose typed file size and SHA-256 records");
 	if (imported) {
 		{
 			std::ofstream tampered(imported->launchPath / "Data" / "Example.big", std::ios::binary | std::ios::app);
@@ -802,6 +821,19 @@ int main()
 		recovery.preservedInterruptedImports > 0 && recovery.recoverableTrashEntries == 0 &&
 		ListRecoverableModifications(importRoot).empty(),
 		"startup recovery must preserve resumable transfers without presenting incomplete imports as restorable mods");
+	// Echelon @test Codex 07/09/2026 Keep active imports in staging and quarantine only abandoned workspace generations.
+	const fs::path activeImport = importRoot / ".staging" / "import-live-owner";
+	fs::create_directories(activeImport, error);
+	std::ofstream(activeImport / "operation.ini") << "[Operation]\nState=importing\nPid=" << TestProcessId() << '\n';
+	const ModificationRecoverySummary activeRecovery = RecoverInterruptedModificationOperations(importRoot);
+	Check(fs::exists(activeImport) && activeRecovery.preservedInterruptedImports == 0,
+		"recovery must leave an import owned by the current process in place");
+	const fs::path staleWorkspace = importRoot / ".staging" / "workspace-generals-stale";
+	fs::create_directories(staleWorkspace, error);
+	fs::last_write_time(staleWorkspace, fs::file_time_type::clock::now() - std::chrono::hours(48), error);
+	const ModificationRecoverySummary staleWorkspaceRecovery = RecoverInterruptedModificationOperations(importRoot);
+	Check(!fs::exists(staleWorkspace) && staleWorkspaceRecovery.preservedInterruptedWorkspaces == 1,
+		"recovery must quarantine an abandoned workspace staging generation");
 #if defined(_WIN32)
 	_putenv_s("ECHELON_DISABLED_BIG_FILES", "00Russian.big; 00RussianZH.big");
 #else

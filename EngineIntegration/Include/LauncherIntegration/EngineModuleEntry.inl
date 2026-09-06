@@ -463,10 +463,13 @@ static uint32_t EchelonModuleStepSession(EchelonEngineSessionV3 *session,
 		}
 	} catch (const std::exception &error) {
 		session->state = ECHELON_ENGINE_SESSION_FAILED_V3;
+		// Echelon @bugfix Codex 07/09/2026 Preserve a stepping exception as a fatal session result through Stop.
+		session->result = ECHELON_ENGINE_FATAL_ERROR;
 		session->errorCode = ECHELON_ENGINE_SESSION_ERROR_LEGACY_RUN_V3;
 		session->errorMessage = error.what();
 	} catch (...) {
 		session->state = ECHELON_ENGINE_SESSION_FAILED_V3;
+		session->result = ECHELON_ENGINE_FATAL_ERROR;
 		session->errorCode = ECHELON_ENGINE_SESSION_ERROR_LEGACY_RUN_V3;
 		session->errorMessage = "Unknown exception while stepping the engine";
 	}
@@ -490,10 +493,15 @@ static uint32_t EchelonModuleStopSession(EchelonEngineSessionV3 *session,
 	}
 	if (session->nativeLifecycle && !session->nativeFinished) {
 		std::string finishError;
-		session->result = EchelonFinishNativeGame(&session->host, session->result == ECHELON_ENGINE_FATAL_ERROR ? 1 : 0,
+		const Int exitCode = session->state == ECHELON_ENGINE_SESSION_FAILED_V3 ||
+			session->result == ECHELON_ENGINE_FATAL_ERROR ? 1 : 0;
+		session->result = EchelonFinishNativeGame(&session->host, exitCode,
 			session->quiescenceFlags, finishError);
 		session->nativeFinished = true;
-		if (!finishError.empty() && session->errorMessage.empty()) session->errorMessage = finishError;
+		if (!finishError.empty()) {
+			if (session->errorMessage.empty()) session->errorMessage = finishError;
+			session->result = ECHELON_ENGINE_FATAL_ERROR;
+		}
 	} else {
 		session->quiescenceFlags = EchelonModuleQueryQuiescence(nullptr);
 	}

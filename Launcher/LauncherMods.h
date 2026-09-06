@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -25,8 +26,16 @@ enum class ModificationType
 	Addon
 };
 
+// Echelon @feature Codex 07/09/2026 Keep the manifest's file digest records typed and available to workspace verification.
+struct ContentFileRecord
+{
+	std::filesystem::path relativePath;
+	uint64_t size = 0;
+	std::string sha256;
+};
+
 // Echelon @feature Codex 14/08/2026 Keep installed content metadata independent from its catalog source and UI.
-struct InstalledModification
+struct ContentManifest
 {
 	std::string id;
 	std::string sourceId;
@@ -43,8 +52,11 @@ struct InstalledModification
 	std::filesystem::path coverImagePath;
 	std::filesystem::path launchPath;
 	std::filesystem::path manifestPath;
+	std::vector<ContentFileRecord> files;
 	bool legacyManifest = false;
 };
+
+using InstalledModification = ContentManifest;
 
 struct ModificationCatalog
 {
@@ -52,13 +64,15 @@ struct ModificationCatalog
 	std::vector<std::string> warnings;
 };
 
-// Echelon @feature Codex 14/08/2026 Resolve one immutable launch stack in base -> mod -> patch -> addon order.
-struct ModificationStack
+// Echelon @feature Codex 07/09/2026 Resolve one immutable content snapshot in base -> mod -> patch -> addon order.
+struct ResolvedContentSnapshot
 {
 	std::string engine;
-	std::vector<const InstalledModification *> layers;
+	std::vector<const ContentManifest *> layers;
 	std::string fingerprint;
 };
+
+using ModificationStack = ResolvedContentSnapshot;
 
 ModificationCatalog LoadModificationCatalog(const std::filesystem::path &modsRoot);
 const InstalledModification *FindModification(const ModificationCatalog &catalog,
