@@ -1,6 +1,8 @@
 {
   global:
     Echelon_GetEngineModuleV2;
+    /* Echelon @refactor Codex 06/09/2026 Keep the additive session ABI discoverable beside V2. */
+    Echelon_GetEngineModuleV3;
   local:
     *;
 };

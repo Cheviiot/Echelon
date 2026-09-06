@@ -17,6 +17,9 @@
 #include "LauncherMods.h"
 #include "LauncherRepositories.h"
 #include "LauncherS3.h"
+#include "LauncherLocks.h"
+#include "LauncherWorkspace.h"
+#include "EngineSession.h"
 #include "LauncherIntegration/ArchiveLoadPolicy.h"
 #include "LauncherIntegration/ContentLayerRuntime.h"
 
@@ -182,6 +185,42 @@ int main()
 	std::error_code error;
 	fs::create_directories(optionsPath.parent_path(), error);
 	Check(!error, "temporary directory must be created");
+	// Echelon @test Codex 06/09/2026 Ensure concurrent launcher operations serialize atomically.
+	{
+		std::string lockMessage;
+		const fs::path lockPath = MakeLockPath(testRoot, "profile", "generals");
+		ScopedDirectoryLock firstLock = ScopedDirectoryLock::TryAcquire(lockPath, lockMessage);
+		ScopedDirectoryLock secondLock = ScopedDirectoryLock::TryAcquire(lockPath, lockMessage);
+		Check(firstLock.acquired() && !secondLock.acquired(),
+			"a profile lock must exclude a parallel operation");
+	}
+	{
+		std::string lockMessage;
+		ScopedDirectoryLock releasedLock = ScopedDirectoryLock::TryAcquire(
+			MakeLockPath(testRoot, "profile", "generals"), lockMessage);
+		Check(releasedLock.acquired(), "a released profile lock must be reacquirable");
+	}
+	// Echelon @test Codex 06/09/2026 Keep the ABI V2 adapter's lifecycle explicit before introducing ABI V3.
+	{
+		bool prepared = false;
+		LegacyBlockingEngineSession session(
+			[&](std::string &) {
+				prepared = true;
+				return true;
+			},
+			[] {
+				EngineSessionResult result;
+				result.result = ECHELON_ENGINE_RETURN_TO_LAUNCHER;
+				result.quiescenceFlags = ECHELON_ENGINE_REQUIRED_QUIESCENCE_FLAGS;
+				return result;
+			});
+		std::string sessionError;
+		Check(session.state() == EngineSessionState::Created && session.Prepare(sessionError) && prepared,
+			"a legacy engine session must prepare exactly once");
+		const EngineSessionResult sessionResult = session.Run();
+		Check(sessionResult.result == ECHELON_ENGINE_RETURN_TO_LAUNCHER && session.state() == EngineSessionState::Quiescent,
+			"a completed legacy engine session must report quiescence before reuse");
+	}
 	{
 		std::ofstream output(optionsPath);
 		output << "MusicVolume = 55\n"
@@ -298,6 +337,15 @@ int main()
 		"launcher settings must not bind modifications to vanilla profile buttons");
 	Check(reloaded.generals.additionalArguments == launcher.generals.additionalArguments,
 		"additional arguments must round-trip");
+	const fs::path legacySettingsPath = testRoot / "Launcher" / "Settings.legacy.ini";
+	{
+		std::ofstream legacy(legacySettingsPath);
+		legacy << "[Launcher]\nSchemaVersion=2\nLanguage=ru\n";
+	}
+	std::string legacySettingsError;
+	const LauncherSettings legacySettings = LoadLauncherSettings(legacySettingsPath, legacySettingsError);
+	Check(!legacySettingsError.empty() && legacySettings.language == LanguageMode::System,
+		"an old launcher settings schema must be rejected without migration");
 
 	std::vector<std::string> arguments{"-win"};
 	Check(AppendProfileArguments(reloaded.generals, arguments, message),
@@ -777,11 +825,14 @@ int main()
 	Check(fs::is_regular_file(testRoot / "UserData" / "GeneralsZH" / "Options.ini") &&
 		fs::is_regular_file(testRoot / "UserData" / "GeneralsZH" / "SagePatch.ini"),
 		"the settings bundle must publish both engine profiles");
+	Check(fs::is_regular_file(testRoot / "Launcher" / "Settings.v3.ini") &&
+		ReadFile(testRoot / "Launcher" / "Settings.v3.ini").find("SchemaVersion=3") != std::string::npos,
+		"the settings bundle must publish the versioned launcher schema");
 	Check(!fs::exists(testRoot / "Launcher" / "Settings.transaction"),
 		"a committed settings transaction must remove its journal");
 
 	const fs::path interruptedTarget = testRoot / "UserData" / "Generals" / "Options.ini";
-	const std::string transaction = "recovery-test";
+	const std::string transaction = "123456789";
 	fs::rename(interruptedTarget, interruptedTarget.string() + ".backup-" + transaction, error);
 	{
 		std::ofstream output(interruptedTarget);
@@ -804,11 +855,18 @@ int main()
 	}
 	{
 		std::ofstream output(testRoot / "Launcher" / "Settings.transaction");
-		output << "new-file-recovery\n1\n0\n1\n1\n1\n";
+		output << "987654321\n1\n0\n1\n1\n1\n";
 	}
 	Check(RecoverInterruptedSettingsBundle(testRoot, message),
 		"an interrupted transaction containing a new file must be recovered");
 	Check(!fs::exists(newlyCreatedTarget), "transaction recovery must remove a partially published new file");
+	{
+		std::ofstream output(testRoot / "Launcher" / "Settings.transaction");
+		output << "../outside\n1\n1\n1\n1\n1\n";
+	}
+	Check(!RecoverInterruptedSettingsBundle(testRoot, message) && fs::exists(testRoot / "Launcher" / "Settings.transaction"),
+		"settings recovery must reject path-like transaction identifiers");
+	fs::remove(testRoot / "Launcher" / "Settings.transaction", error);
 
 	const fs::path modLayerRoot = testRoot / "LayerMod";
 	const fs::path patchLayerRoot = testRoot / "LayerPatch";
@@ -963,6 +1021,64 @@ int main()
 	Check(MoveSelectedAddonTo(selectionProfile, ModificationSelectionKey(stackAddonUpdate), 1) &&
 		selectionProfile.addonSelections.back() == ModificationSelectionKey(stackAddonUpdate),
 		"drag reorder must move an active add-on directly to the requested layer index");
+	// Echelon @test Codex 06/09/2026 Verify workspace publication, fingerprint validation and idempotent reuse.
+	InstalledModification workspaceFixture;
+	workspaceFixture.id = "local:workspace-fixture";
+	workspaceFixture.engine = "generals";
+	workspaceFixture.type = ModificationType::Mod;
+	workspaceFixture.launchPath = gibImport.installedRoot;
+	if (gibImport.success) {
+		const ModificationCatalog workspaceCatalog = LoadModificationCatalog(importRoot);
+		if (const InstalledModification *catalogFixture =
+			FindModification(workspaceCatalog, "generals", gibImport.selectionKey)) {
+			workspaceFixture.launchPath = catalogFixture->launchPath;
+			workspaceFixture.contentFingerprint = catalogFixture->contentFingerprint;
+		}
+		const std::string workspaceSourceBefore = ReadFile(gibImport.installedRoot / "content" / "Standalone.gib");
+		ModificationStack workspaceStack;
+		workspaceStack.engine = "generals";
+		workspaceStack.layers = {&workspaceFixture};
+		workspaceStack.fingerprint = "workspace-fixture";
+		const fs::path workspaceRoot = testRoot / "WorkspaceMods";
+		const WorkspacePreparationResult prepared = PrepareContentWorkspace(
+			workspaceRoot, "generals", &workspaceStack);
+		const WorkspacePreparationResult reused = PrepareContentWorkspace(
+			workspaceRoot, "generals", &workspaceStack);
+		Check(prepared.success && !prepared.reused && fs::is_regular_file(
+			prepared.record.path / "workspace.ini"),
+			"a verified content stack must publish an atomic workspace record");
+		Check(prepared.success && prepared.record.layerRoots.size() == 1 &&
+			prepared.record.layerRoots.front() != workspaceFixture.launchPath &&
+			fs::is_regular_file(prepared.record.layerRoots.front() / "Standalone.gib"),
+			"workspace layers must be materialized outside the installed source");
+		Check(reused.success && reused.reused && reused.record.path == prepared.record.path,
+			"an unchanged content stack must reuse its published workspace");
+		Check(ReadFile(gibImport.installedRoot / "content" / "Standalone.gib") == workspaceSourceBefore,
+			"workspace publication must leave the installed source content unchanged");
+		if (prepared.success && !prepared.record.layerRoots.empty()) {
+			std::ofstream tampered(prepared.record.layerRoots.front() / "Standalone.gib",
+				std::ios::binary | std::ios::app);
+			tampered << "workspace-tamper";
+			tampered.flush();
+			tampered.close();
+			const WorkspacePreparationResult repaired = PrepareContentWorkspace(
+				workspaceRoot, "generals", &workspaceStack);
+			Check(repaired.success && !repaired.reused,
+				"a modified published layer must be quarantined and rebuilt from the verified source");
+			if (repaired.success && !repaired.record.layerRoots.empty()) {
+				std::ofstream malformedRecord(repaired.record.path / "workspace.ini", std::ios::app);
+				malformedRecord << "Layer0=" << repaired.record.layerRoots.front().string() << '\n';
+				malformedRecord.flush();
+				malformedRecord.close();
+				const WorkspacePreparationResult repairedRecord = PrepareContentWorkspace(
+					workspaceRoot, "generals", &workspaceStack);
+				Check(repairedRecord.success && !repairedRecord.reused,
+					"duplicate workspace layer keys must be rejected and rebuilt");
+			}
+		}
+	} else {
+		Check(false, "workspace fixture must resolve an installed local layer");
+	}
 	message.clear();
 	Check(SaveModificationSelectionProfile(testRoot / "ProfileMods", selectionProfile, message),
 		"modification stack profile must publish atomically");

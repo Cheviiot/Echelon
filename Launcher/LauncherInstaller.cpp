@@ -9,6 +9,8 @@
 */
 
 #include "LauncherInstaller.h"
+
+#include "LauncherLocks.h"
 #include "LauncherIntegration/ArchiveLoadPolicy.h"
 
 #include <archive.h>
@@ -642,6 +644,13 @@ ModificationOperationResult ImportLocalModification(const LocalImportRequest &re
 		result.message = "Downloaded package size does not match its catalog";
 		return result;
 	}
+	std::string lockError;
+	ScopedDirectoryLock contentLock = ScopedDirectoryLock::TryAcquire(
+		MakeLockPath(request.modsRoot, "content", "operation"), lockError);
+	if (!contentLock.acquired()) {
+		result.message = lockError.empty() ? "Another content operation is already active" : lockError;
+		return result;
+	}
 	std::string inputDigest;
 	if (inputIsFile && !request.expectedSha256.empty()) {
 		inputDigest = DigestFile(request.inputPath, result.message, nullptr);
@@ -746,6 +755,13 @@ ModificationOperationResult MoveInstalledModificationToTrash(const fs::path &mod
 	const InstalledModification &modification)
 {
 	ModificationOperationResult result;
+	std::string lockError;
+	ScopedDirectoryLock contentLock = ScopedDirectoryLock::TryAcquire(
+		MakeLockPath(modsRoot, "content", "operation"), lockError);
+	if (!contentLock.acquired()) {
+		result.message = lockError.empty() ? "Another content operation is already active" : lockError;
+		return result;
+	}
 	std::error_code error;
 	const fs::path installedRoot = fs::weakly_canonical(modsRoot / "Installed", error);
 	const fs::path versionRoot = fs::weakly_canonical(modification.manifestPath.parent_path(), error);
@@ -770,6 +786,13 @@ ModificationOperationResult MoveInstalledModificationToTrash(const fs::path &mod
 ModificationRecoverySummary RecoverInterruptedModificationOperations(const fs::path &modsRoot)
 {
 	ModificationRecoverySummary summary;
+	std::string lockError;
+	ScopedDirectoryLock recoveryLock = ScopedDirectoryLock::TryAcquire(
+		MakeLockPath(modsRoot, "content", "operation"), lockError);
+	if (!recoveryLock.acquired()) {
+		summary.warnings.push_back("Content recovery skipped because an import is active");
+		return summary;
+	}
 	const fs::path stagingRoot = modsRoot / ".staging";
 	const fs::path trashRoot = modsRoot / ".trash";
 	std::error_code error;
@@ -842,6 +865,13 @@ std::vector<RecoverableModification> ListRecoverableModifications(const fs::path
 ModificationOperationResult RestoreModificationFromTrash(const fs::path &modsRoot, const fs::path &trashPath)
 {
 	ModificationOperationResult result;
+	std::string lockError;
+	ScopedDirectoryLock contentLock = ScopedDirectoryLock::TryAcquire(
+		MakeLockPath(modsRoot, "content", "operation"), lockError);
+	if (!contentLock.acquired()) {
+		result.message = lockError.empty() ? "Another content operation is already active" : lockError;
+		return result;
+	}
 	std::error_code error;
 	const fs::path canonicalTrashRoot = fs::weakly_canonical(modsRoot / ".trash", error);
 	const fs::path canonicalSource = fs::weakly_canonical(trashPath, error);
@@ -894,6 +924,13 @@ ModificationOperationResult ReplaceModificationCover(const fs::path &modsRoot,
 	const InstalledModification &modification, const fs::path &imagePath)
 {
 	ModificationOperationResult result;
+	std::string lockError;
+	ScopedDirectoryLock contentLock = ScopedDirectoryLock::TryAcquire(
+		MakeLockPath(modsRoot, "content", "operation"), lockError);
+	if (!contentLock.acquired()) {
+		result.message = lockError.empty() ? "Another content operation is already active" : lockError;
+		return result;
+	}
 	std::error_code error;
 	const fs::path canonicalInstalledRoot = fs::weakly_canonical(modsRoot / "Installed", error);
 	const fs::path versionRoot = fs::weakly_canonical(modification.manifestPath.parent_path(), error);

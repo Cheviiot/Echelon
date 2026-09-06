@@ -1,5 +1,8 @@
 // Echelon @refactor Codex 05/09/2026 Shared hosted lifecycle included by each SDL entry point.
 // GeneralsX @feature Codex 11/08/2026 Keep legacy memory pools alive across launcher sessions.
+#include <new>
+#include <string>
+
 static bool s_echelonModuleInitialized = false;
 
 static void EchelonModuleLog(const EchelonEngineHostV2 *host, const char *message)
@@ -76,7 +79,8 @@ static bool EchelonRequestWindowMode(void *userData, bool windowed, int renderWi
 
 static EchelonEngineResultV2 EchelonModuleRun(const EchelonEngineHostV2 *host)
 {
-	if (!host || host->struct_size < sizeof(EchelonEngineHostV2) || host->abi_version != ECHELON_ENGINE_ABI_VERSION) {
+	if (!host || host->struct_size < sizeof(EchelonEngineHostV2) ||
+		(host->abi_version != ECHELON_ENGINE_ABI_VERSION && host->abi_version != ECHELON_ENGINE_ABI_VERSION_V3)) {
 		return ECHELON_ENGINE_FATAL_ERROR;
 	}
 
@@ -172,6 +176,163 @@ static EchelonEngineResultV2 EchelonModuleRun(const EchelonEngineHostV2 *host)
 	return ECHELON_ENGINE_FATAL_ERROR;
 }
 
+// Echelon @feature Codex 06/09/2026 Expose an explicit V3 session boundary while the legacy GameMain loop remains blocking.
+struct EchelonEngineSessionV3
+{
+	EchelonEngineHostV3 host{};
+	EchelonEngineSessionStateV3 state = ECHELON_ENGINE_SESSION_CREATED_V3;
+	EchelonEngineResultV2 result = ECHELON_ENGINE_FATAL_ERROR;
+	uint32_t quiescenceFlags = 0;
+	uint32_t errorCode = ECHELON_ENGINE_SESSION_ERROR_NONE_V3;
+	std::string errorMessage;
+};
+
+static void EchelonSessionWriteResult(const EchelonEngineSessionV3 *session,
+	EchelonEngineSessionResultV3 *result)
+{
+	if (!result) return;
+	result->struct_size = sizeof(EchelonEngineSessionResultV3);
+	result->state = session ? static_cast<uint32_t>(session->state) :
+		static_cast<uint32_t>(ECHELON_ENGINE_SESSION_FAILED_V3);
+	result->result = session ? session->result : ECHELON_ENGINE_FATAL_ERROR;
+	result->quiescence_flags = session ? session->quiescenceFlags : 0;
+	result->error_code = session ? session->errorCode : ECHELON_ENGINE_SESSION_ERROR_INVALID_ARGUMENT_V3;
+	result->error_message = session && !session->errorMessage.empty() ? session->errorMessage.c_str() : nullptr;
+}
+
+static EchelonEngineSessionV3 *EchelonModuleCreateSession(const EchelonEngineHostV3 *host)
+{
+	if (!host || host->struct_size < sizeof(EchelonEngineHostV2) ||
+		host->abi_version != ECHELON_ENGINE_ABI_VERSION_V3) return nullptr;
+	EchelonEngineSessionV3 *session = new (std::nothrow) EchelonEngineSessionV3();
+	if (!session) return nullptr;
+	session->host = *host;
+	return session;
+}
+
+static uint32_t EchelonModulePrepareSession(EchelonEngineSessionV3 *session,
+	EchelonEngineSessionResultV3 *result)
+{
+	if (!session) {
+		EchelonSessionWriteResult(nullptr, result);
+		return 0;
+	}
+	session->errorMessage.clear();
+	session->errorCode = ECHELON_ENGINE_SESSION_ERROR_NONE_V3;
+	if (session->state != ECHELON_ENGINE_SESSION_CREATED_V3) {
+		session->state = ECHELON_ENGINE_SESSION_FAILED_V3;
+		session->errorCode = ECHELON_ENGINE_SESSION_ERROR_INVALID_STATE_V3;
+		session->errorMessage = "Engine session was prepared more than once";
+		EchelonSessionWriteResult(session, result);
+		return 0;
+	}
+	std::string contentError;
+	if (!EchelonContentRuntime::Configure(session->host.content_layers, session->host.content_layer_count, contentError)) {
+		session->state = ECHELON_ENGINE_SESSION_FAILED_V3;
+		session->errorCode = ECHELON_ENGINE_SESSION_ERROR_CONTENT_V3;
+		session->errorMessage = contentError;
+		EchelonSessionWriteResult(session, result);
+		return 0;
+	}
+	EchelonContentRuntime::Clear();
+	session->state = ECHELON_ENGINE_SESSION_PREPARED_V3;
+	session->result = ECHELON_ENGINE_RETURN_TO_LAUNCHER;
+	EchelonSessionWriteResult(session, result);
+	return 1;
+}
+
+static uint32_t EchelonModuleStartSession(EchelonEngineSessionV3 *session,
+	EchelonEngineSessionResultV3 *result)
+{
+	if (!session) {
+		EchelonSessionWriteResult(nullptr, result);
+		return 0;
+	}
+	session->errorMessage.clear();
+	session->errorCode = ECHELON_ENGINE_SESSION_ERROR_NONE_V3;
+	if (session->state != ECHELON_ENGINE_SESSION_PREPARED_V3) {
+		session->state = ECHELON_ENGINE_SESSION_FAILED_V3;
+		session->errorCode = ECHELON_ENGINE_SESSION_ERROR_INVALID_STATE_V3;
+		session->errorMessage = "Engine session was not prepared";
+		EchelonSessionWriteResult(session, result);
+		return 0;
+	}
+	session->state = ECHELON_ENGINE_SESSION_RUNNING_V3;
+	session->result = EchelonModuleRun(&session->host);
+	session->quiescenceFlags = EchelonModuleQueryQuiescence(nullptr);
+	session->state = ECHELON_ENGINE_SESSION_STOPPING_V3;
+	if (session->result == ECHELON_ENGINE_FATAL_ERROR) {
+		session->errorCode = ECHELON_ENGINE_SESSION_ERROR_LEGACY_RUN_V3;
+		session->errorMessage = "Legacy engine run failed";
+	}
+	EchelonSessionWriteResult(session, result);
+	return 1;
+}
+
+static uint32_t EchelonModuleStepSession(EchelonEngineSessionV3 *session,
+	EchelonEngineSessionResultV3 *result)
+{
+	if (!session) {
+		EchelonSessionWriteResult(nullptr, result);
+		return 0;
+	}
+	// The first V3 adapter wraps the existing blocking GameMain loop. Start performs the
+	// legacy frame pump; Step remains an explicit completion observation until the engine
+	// exposes a native per-frame entry point.
+	if (session->state != ECHELON_ENGINE_SESSION_STOPPING_V3 &&
+		session->state != ECHELON_ENGINE_SESSION_QUIESCENT_V3) {
+		session->errorCode = ECHELON_ENGINE_SESSION_ERROR_INVALID_STATE_V3;
+		session->errorMessage = "Legacy engine session has no frame to step before Start completes";
+		EchelonSessionWriteResult(session, result);
+		return 0;
+	}
+	EchelonSessionWriteResult(session, result);
+	return 1;
+}
+
+static uint32_t EchelonModuleStopSession(EchelonEngineSessionV3 *session,
+	EchelonEngineSessionResultV3 *result)
+{
+	if (!session) {
+		EchelonSessionWriteResult(nullptr, result);
+		return 0;
+	}
+	if (session->state != ECHELON_ENGINE_SESSION_STOPPING_V3) {
+		session->errorCode = ECHELON_ENGINE_SESSION_ERROR_INVALID_STATE_V3;
+		session->errorMessage = "Engine session is not waiting for Stop";
+		EchelonSessionWriteResult(session, result);
+		return 0;
+	}
+	session->quiescenceFlags = EchelonModuleQueryQuiescence(nullptr);
+	if ((session->quiescenceFlags & ECHELON_ENGINE_REQUIRED_QUIESCENCE_FLAGS) !=
+		ECHELON_ENGINE_REQUIRED_QUIESCENCE_FLAGS) {
+		session->state = ECHELON_ENGINE_SESSION_FAILED_V3;
+		session->errorCode = ECHELON_ENGINE_SESSION_ERROR_NOT_QUIESCENT_V3;
+		session->errorMessage = "Engine session did not reach quiescence";
+		EchelonSessionWriteResult(session, result);
+		return 0;
+	}
+	session->state = ECHELON_ENGINE_SESSION_QUIESCENT_V3;
+	EchelonSessionWriteResult(session, result);
+	return 1;
+}
+
+static uint32_t EchelonModuleQuerySession(const EchelonEngineSessionV3 *session,
+	EchelonEngineSessionResultV3 *result)
+{
+	if (!session) {
+		EchelonSessionWriteResult(nullptr, result);
+		return 0;
+	}
+	EchelonSessionWriteResult(session, result);
+	return 1;
+}
+
+static void EchelonModuleDestroySession(EchelonEngineSessionV3 *session)
+{
+	delete session;
+}
+
 static void EchelonModuleShutdown()
 {
 	if (!s_echelonModuleInitialized) {
@@ -205,6 +366,29 @@ ECHELON_ENGINE_EXPORT const EchelonEngineModuleV2 *Echelon_GetEngineModuleV2(voi
 		&EchelonModuleRun,
 		&EchelonModuleQueryQuiescence,
 		&EchelonModuleShutdown
+	};
+	return &module;
+}
+
+ECHELON_ENGINE_EXPORT const EchelonEngineModuleV3 *Echelon_GetEngineModuleV3(void)
+{
+	static const EchelonEngineModuleV3 module = {
+		sizeof(EchelonEngineModuleV3),
+		ECHELON_ENGINE_ABI_VERSION_V3,
+#if RTS_GENERALS
+		"generals",
+		"Command & Conquer: Generals",
+#else
+		"zerohour",
+		"Command & Conquer: Generals - Zero Hour",
+#endif
+		&EchelonModuleCreateSession,
+		&EchelonModulePrepareSession,
+		&EchelonModuleStartSession,
+		&EchelonModuleStepSession,
+		&EchelonModuleStopSession,
+		&EchelonModuleQuerySession,
+		&EchelonModuleDestroySession
 	};
 	return &module;
 }

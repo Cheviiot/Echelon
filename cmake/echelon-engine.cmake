@@ -10,7 +10,13 @@ add_library(echelon_brand INTERFACE)
 target_include_directories(echelon_brand INTERFACE "${ECHELON_BINARY_DIR}/generated")
 
 function(echelon_add_host_variant base)
-    get_target_property(sources ${base} SOURCES)
+    # Echelon @build Codex 06/09/2026 Propagate SDL3 headers to hosted engine variants.
+    # The upstream game-engine target includes SDL3 directly, while the launcher owns the
+    # shared SDL library; keep this bridge in the product layer instead of editing upstream.
+    if(SAGE_USE_SDL3 AND TARGET SDL3::Headers)
+        target_link_libraries(${base} PUBLIC SDL3::Headers)
+    endif()
+	get_target_property(sources ${base} SOURCES)
     add_library(${base}_host STATIC ${sources})
     foreach(property INCLUDE_DIRECTORIES INTERFACE_INCLUDE_DIRECTORIES COMPILE_OPTIONS
             COMPILE_DEFINITIONS PRECOMPILE_HEADERS INTERFACE_COMPILE_OPTIONS

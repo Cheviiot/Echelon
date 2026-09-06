@@ -129,10 +129,11 @@ There are no `GeneralsX` or `GeneralsXZH` launcher aliases.
 
 ## Private engine ABI
 
-The host and both modules use the versioned C ABI declared in `LauncherIntegration/EngineModuleAPI.h`. A module exports exactly one entry point:
+The host and both modules use the versioned C ABI declared in `LauncherIntegration/EngineModuleAPI.h`. A module exports the stable V2 entry point and the additive V3 session entry point:
 
 ```text
 Echelon_GetEngineModuleV2
+Echelon_GetEngineModuleV3
 ```
 
 The ABI includes the shared SDL window, game arguments, game-data and user-data paths, selected profile, and an ordered array of `EchelonContentLayerV1` records. Each record carries its type, source-qualified ID, version, canonical read-only root, priority, and content fingerprint. Loose files resolve from the highest layer first; BIG/GIB files throughout each layer mount in ascending layer priority with verified overwrite precedence. The engine clears the overlay before reporting the content-layer quiescence bit and returning `ReturnToLauncher`, `ExitApplication`, or `FatalError`.

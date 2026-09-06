@@ -137,19 +137,24 @@ bool WriteAtomically(const fs::path &path, const std::string &contents, std::str
 		errorMessage = "Cannot create settings directory: " + error.message();
 		return false;
 	}
-	const fs::path temporary = path.string() + ".tmp";
+	// Echelon @bugfix Codex 06/09/2026 Give every single-file publication its own staging name.
+	// A fixed .tmp path allowed a second launcher instance to overwrite another instance's pending file.
+	const std::string transaction = std::to_string(
+		std::chrono::steady_clock::now().time_since_epoch().count());
+	const fs::path temporary = path.string() + ".tmp-" + transaction;
 	{
 		std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
 		if (!output) {
 			errorMessage = "Cannot create temporary settings file";
-			return false;
+		} else {
+			output << contents;
+			output.flush();
+			if (!output) errorMessage = "Cannot write temporary settings file";
 		}
-		output << contents;
-		output.flush();
-		if (!output) {
-			errorMessage = "Cannot write temporary settings file";
-			return false;
-		}
+	}
+	if (!errorMessage.empty()) {
+		fs::remove(temporary, error);
+		return false;
 	}
 	if (!SDL_RenamePath(temporary.string().c_str(), path.string().c_str())) {
 		errorMessage = std::string("Cannot publish settings file: ") + SDL_GetError();
@@ -281,7 +286,7 @@ bool PublishSettingsFiles(const std::vector<std::pair<fs::path, std::string>> &f
 std::string SerializeLauncherSettings(const LauncherSettings &settings)
 {
 	std::ostringstream output;
-	output << "[Launcher]\nSchemaVersion=2\nLanguage=" << LanguageName(settings.language)
+	output << "[Launcher]\nSchemaVersion=3\nLanguage=" << LanguageName(settings.language)
 		<< "\nWindowMode=" << WindowModeName(settings.windowMode)
 		<< "\nWindowWidth=" << std::clamp(settings.windowWidth, 640, 16384)
 		<< "\nWindowHeight=" << std::clamp(settings.windowHeight, 480, 16384) << "\n\n";
@@ -499,6 +504,7 @@ LauncherSettings LoadLauncherSettings(const fs::path &path, std::string &errorMe
 	}
 	std::string section;
 	std::string line;
+	int schemaVersion = 0;
 	while (std::getline(input, line)) {
 		line = Trim(line);
 		if (line.empty() || line[0] == ';' || line[0] == '#') continue;
@@ -511,7 +517,8 @@ LauncherSettings LoadLauncherSettings(const fs::path &path, std::string &errorMe
 		const std::string key = ToLower(Trim(line.substr(0, equals)));
 		const std::string value = Trim(line.substr(equals + 1));
 		if (section == "launcher") {
-			if (key == "language") settings.language = ParseLanguage(value);
+			if (key == "schemaversion") schemaVersion = ParseInteger(value, 0, 0, 100);
+			else if (key == "language") settings.language = ParseLanguage(value);
 			else if (key == "windowmode") settings.windowMode = ParseWindowMode(value);
 			else if (key == "windowwidth") settings.windowWidth = ParseInteger(value, settings.windowWidth, 640, 16384);
 			else if (key == "windowheight") settings.windowHeight = ParseInteger(value, settings.windowHeight, 480, 16384);
@@ -526,6 +533,14 @@ LauncherSettings LoadLauncherSettings(const fs::path &path, std::string &errorMe
 		else if (key == "russianlocalization") profile->russianLocalization = ParseBool(value, profile->russianLocalization);
 		// Echelon @refactor Codex 14/08/2026 Ignore the V1 ActiveModification key so vanilla profile buttons stay clean.
 		else if (key == "additionalarguments") profile->additionalArguments = value;
+	}
+	if (!input.eof()) {
+		errorMessage = "Cannot finish reading launcher settings";
+		return LauncherSettings{};
+	}
+	if (schemaVersion != 3) {
+		errorMessage = "Launcher settings use an unsupported schema; defaults were loaded";
+		return LauncherSettings{};
 	}
 	return settings;
 }
@@ -638,7 +653,7 @@ bool SaveSettingsBundle(const fs::path &root, const LauncherSettings &launcher,
 		{zeroHourOptionsPath, SerializeGameOptions(zeroHourOptionsPath, zeroHourOptions)},
 		{generalsSagePatchPath, SerializeSagePatchOptions(generalsSagePatchPath, generalsSagePatch)},
 		{zeroHourSagePatchPath, SerializeSagePatchOptions(zeroHourSagePatchPath, zeroHourSagePatch)},
-		{root / "Launcher" / "Settings.ini", SerializeLauncherSettings(launcher)}
+		{root / "Launcher" / "Settings.v3.ini", SerializeLauncherSettings(launcher)}
 	}, root / "Launcher" / "Settings.transaction", errorMessage);
 }
 
@@ -653,7 +668,10 @@ bool RecoverInterruptedSettingsBundle(const fs::path &root, std::string &errorMe
 	}
 	std::ifstream journal(journalPath);
 	std::string transaction;
-	if (!std::getline(journal, transaction) || transaction.empty()) {
+	if (!std::getline(journal, transaction) || transaction.empty() || transaction.size() > 32 ||
+		!std::all_of(transaction.begin(), transaction.end(), [](unsigned char character) {
+			return std::isdigit(character) != 0;
+		})) {
 		errorMessage = "Settings transaction journal is damaged";
 		return false;
 	}
@@ -662,7 +680,7 @@ bool RecoverInterruptedSettingsBundle(const fs::path &root, std::string &errorMe
 		root / "UserData" / "GeneralsZH" / "Options.ini",
 		root / "UserData" / "Generals" / "SagePatch.ini",
 		root / "UserData" / "GeneralsZH" / "SagePatch.ini",
-		root / "Launcher" / "Settings.ini"
+		root / "Launcher" / "Settings.v3.ini"
 	};
 	std::vector<bool> hadTarget;
 	for (size_t index = 0; index < std::size(targets); ++index) {
@@ -674,18 +692,36 @@ bool RecoverInterruptedSettingsBundle(const fs::path &root, std::string &errorMe
 		hadTarget.push_back(state == "1");
 	}
 	for (size_t index = 0; index < std::size(targets); ++index) {
+		// Echelon @bugfix Codex 06/09/2026 Treat filesystem failures as recovery errors before removing anything.
 		const fs::path backup = targets[index].string() + ".backup-" + transaction;
 		const fs::path staged = targets[index].string() + ".stage-" + transaction;
-		if (fs::exists(backup, error)) {
+		const bool backupExists = fs::exists(backup, error);
+		if (error) {
+			errorMessage = "Cannot inspect interrupted settings backup: " + error.message();
+			return false;
+		}
+		if (backupExists) {
 			fs::remove(targets[index], error);
+			if (error) {
+				errorMessage = "Cannot remove partially published settings file: " + error.message();
+				return false;
+			}
 			if (!SDL_RenamePath(backup.string().c_str(), targets[index].string().c_str())) {
 				errorMessage = std::string("Cannot restore interrupted settings transaction: ") + SDL_GetError();
 				return false;
 			}
 		} else if (!hadTarget[index]) {
 			fs::remove(targets[index], error);
+			if (error) {
+				errorMessage = "Cannot remove incomplete settings file: " + error.message();
+				return false;
+			}
 		}
 		fs::remove(staged, error);
+		if (error) {
+			errorMessage = "Cannot remove staged settings file: " + error.message();
+			return false;
+		}
 	}
 	fs::remove(journalPath, error);
 	if (error) {

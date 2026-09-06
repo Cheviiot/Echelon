@@ -19,6 +19,7 @@ inline constexpr const char *kProductSlug = "@ECHELON_PRODUCT_SLUG@";
 inline constexpr const char *kDataDirectory = "@ECHELON_DATA_DIRECTORY@";
 inline constexpr const char *kInstallDataDirectory = "@ECHELON_INSTALL_SLUG@";
 inline constexpr const char *kModuleExport = "@ECHELON_MODULE_EXPORT@";
+inline constexpr const char *kModuleExportV3 = "@ECHELON_MODULE_EXPORT_V3@";
 inline constexpr const char *kReleaseApiUrl = "@ECHELON_RELEASE_API_URL@";
 inline constexpr const char *kReleasesUrl = "@ECHELON_RELEASES_URL@";
 inline constexpr const char *kUpdateUserAgent = "@ECHELON_UPDATE_USER_AGENT@";

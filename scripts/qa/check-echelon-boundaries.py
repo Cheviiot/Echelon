@@ -64,6 +64,8 @@ if args.build:
             module = build / "Echelon" / f"libEchelon{game}Engine.so"
             symbols = subprocess.check_output(["nm", "-D", "--defined-only", str(module)], text=True)
             exported = {line.split()[-1] for line in symbols.splitlines()}
-            check(exported == {brand["ECHELON_MODULE_EXPORT"]}, "unexpected engine exports: " + repr(exported))
+            # Echelon @refactor Codex 06/09/2026 Validate the additive V3 session entry beside the stable V2 ABI.
+            check(exported == {brand["ECHELON_MODULE_EXPORT"], brand["ECHELON_MODULE_EXPORT_V3"]},
+                  "unexpected engine exports: " + repr(exported))
 
 print("PASS: Echelon identity, source ownership and build boundaries")

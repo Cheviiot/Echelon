@@ -11,7 +11,7 @@ The original dirty development tree was preserved in checkpoint `984ab6c91`. Mer
 | Location | Responsibility |
 |---|---|
 | `Launcher/` | SDL UI, game discovery/import, settings, profiles, local mods and test-only transport/parsers |
-| `EngineIntegration/Include/LauncherIntegration/` | Private V2 host ABI, shared engine entry, archive and content-layer interfaces |
+| `EngineIntegration/Include/LauncherIntegration/` | Private V2/V3 host ABI, shared engine entry, archive and content-layer interfaces |
 | `EngineIntegration/Source/` | Content runtime, process allocator and exported-symbol policy |
 | `cmake/` | Generated product identity, hosted library variants and launcher dependencies |
 | `assets/launcher/` | Editable Echelon SVG masters, rendered PNGs, redistributable font and licenses |
@@ -28,13 +28,13 @@ The main retained integration points are the two SDL entry files, game lifecycle
 
 ## Product identity and local content
 
-The executable is `Echelon`, target `echelon_launcher`, app ID `io.github.cheviiot.Echelon`, private ABI entry `Echelon_GetEngineModuleV2`, and data root `$HOME/.Echelon`. The V2 ABI layout remains unchanged. Public paths and environment options use `ECHELON_*`; generated C++/JSON identity comes from `cmake/brand.cmake`.
+The executable is `Echelon`, target `echelon_launcher`, app ID `io.github.cheviiot.Echelon`, private ABI entries `Echelon_GetEngineModuleV2` and additive `Echelon_GetEngineModuleV3`, and data root `$HOME/.Echelon`. The V2 ABI layout remains unchanged; V3 currently adapts the blocking legacy loop to an explicit session lifecycle. Public paths and environment options use `ECHELON_*`; generated C++/JSON identity comes from `cmake/brand.cmake`.
 
 This is a clean installation. The application does not discover or migrate old Arsenal/GeneralsX roots. Existing directories were used only as explicitly selected, read-only QA inputs in temporary homes.
 
 Local archive/folder imports, installed versions, compatibility/dependency validation, profiles, layers, integrity verification and trash/restore remain available. Catalog refresh, remote installs and startup catalog requests are removed from the product UI. Generic HTTPS/S3 transport and legacy catalog parsing remain isolated in tests; the legacy parser's schema names intentionally retain compatibility. The retired repository plan is archived, with no replacement endpoint or deployment.
 
-Hosted engine libraries are compiled separately from standalone libraries. Only hosted variants receive `ECHELON_BRAND`, `ECHELON_ENGINE_HOSTED` and `ECHELON_ENGINE_MODULE_ALLOCATOR`. Standalone defaults and allocator behavior remain independent. Linux module exports are restricted to the one V2 entry.
+Hosted engine libraries are compiled separately from standalone libraries. Only hosted variants receive `ECHELON_BRAND`, `ECHELON_ENGINE_HOSTED` and `ECHELON_ENGINE_MODULE_ALLOCATOR`. Standalone defaults and allocator behavior remain independent. Linux module exports are restricted to the two Echelon ABI entry points.
 
 ## Build environment
 

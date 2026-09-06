@@ -14,6 +14,7 @@
 
 // Echelon @feature Codex 14/08/2026 Carry a complete immutable content stack through ABI V2.
 #define ECHELON_ENGINE_ABI_VERSION 2u
+#define ECHELON_ENGINE_ABI_VERSION_V3 3u
 #define ECHELON_MAX_CONTENT_LAYERS 64u
 
 #if defined(_WIN32)
@@ -128,6 +129,9 @@ typedef struct EchelonEngineHostV2
 	const char *content_stack_fingerprint;
 } EchelonEngineHostV2;
 
+// Echelon @feature Codex 06/09/2026 Keep the V3 host payload source-compatible while versioning the session contract.
+typedef EchelonEngineHostV2 EchelonEngineHostV3;
+
 typedef struct EchelonEngineModuleV2
 {
 	uint32_t struct_size;
@@ -141,7 +145,70 @@ typedef struct EchelonEngineModuleV2
 
 typedef const EchelonEngineModuleV2 *(*EchelonGetEngineModuleV2Fn)(void);
 
+typedef enum EchelonEngineSessionStateV3
+{
+	ECHELON_ENGINE_SESSION_CREATED_V3 = 0,
+	ECHELON_ENGINE_SESSION_PREPARED_V3 = 1,
+	ECHELON_ENGINE_SESSION_RUNNING_V3 = 2,
+	ECHELON_ENGINE_SESSION_STOPPING_V3 = 3,
+	ECHELON_ENGINE_SESSION_QUIESCENT_V3 = 4,
+	ECHELON_ENGINE_SESSION_FAILED_V3 = 5
+} EchelonEngineSessionStateV3;
+
+typedef enum EchelonEngineSessionErrorV3
+{
+	ECHELON_ENGINE_SESSION_ERROR_NONE_V3 = 0,
+	ECHELON_ENGINE_SESSION_ERROR_INVALID_ARGUMENT_V3 = 1,
+	ECHELON_ENGINE_SESSION_ERROR_INVALID_STATE_V3 = 2,
+	ECHELON_ENGINE_SESSION_ERROR_CONTENT_V3 = 3,
+	ECHELON_ENGINE_SESSION_ERROR_NOT_QUIESCENT_V3 = 4,
+	ECHELON_ENGINE_SESSION_ERROR_LEGACY_RUN_V3 = 5
+} EchelonEngineSessionErrorV3;
+
+typedef struct EchelonEngineSessionV3 EchelonEngineSessionV3;
+
+typedef struct EchelonEngineSessionResultV3
+{
+	uint32_t struct_size;
+	uint32_t state;
+	EchelonEngineResultV2 result;
+	uint32_t quiescence_flags;
+	uint32_t error_code;
+	const char *error_message;
+} EchelonEngineSessionResultV3;
+
+typedef EchelonEngineSessionV3 *(*EchelonEngineCreateSessionV3Fn)(const EchelonEngineHostV3 *host);
+typedef uint32_t (*EchelonEnginePrepareSessionV3Fn)(EchelonEngineSessionV3 *session,
+	EchelonEngineSessionResultV3 *result);
+typedef uint32_t (*EchelonEngineStartSessionV3Fn)(EchelonEngineSessionV3 *session,
+	EchelonEngineSessionResultV3 *result);
+typedef uint32_t (*EchelonEngineStepSessionV3Fn)(EchelonEngineSessionV3 *session,
+	EchelonEngineSessionResultV3 *result);
+typedef uint32_t (*EchelonEngineStopSessionV3Fn)(EchelonEngineSessionV3 *session,
+	EchelonEngineSessionResultV3 *result);
+typedef uint32_t (*EchelonEngineQuerySessionV3Fn)(const EchelonEngineSessionV3 *session,
+	EchelonEngineSessionResultV3 *result);
+typedef void (*EchelonEngineDestroySessionV3Fn)(EchelonEngineSessionV3 *session);
+
+typedef struct EchelonEngineModuleV3
+{
+	uint32_t struct_size;
+	uint32_t abi_version;
+	const char *engine_id;
+	const char *display_name;
+	EchelonEngineCreateSessionV3Fn create_session;
+	EchelonEnginePrepareSessionV3Fn prepare_session;
+	EchelonEngineStartSessionV3Fn start_session;
+	EchelonEngineStepSessionV3Fn step_session;
+	EchelonEngineStopSessionV3Fn stop_session;
+	EchelonEngineQuerySessionV3Fn query_session;
+	EchelonEngineDestroySessionV3Fn destroy_session;
+} EchelonEngineModuleV3;
+
+typedef const EchelonEngineModuleV3 *(*EchelonGetEngineModuleV3Fn)(void);
+
 ECHELON_ENGINE_EXPORT const EchelonEngineModuleV2 *Echelon_GetEngineModuleV2(void);
+ECHELON_ENGINE_EXPORT const EchelonEngineModuleV3 *Echelon_GetEngineModuleV3(void);
 
 #ifdef __cplusplus
 }

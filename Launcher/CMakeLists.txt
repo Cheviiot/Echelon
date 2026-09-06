@@ -1,28 +1,34 @@
 # Echelon @build Codex 12/08/2026 Universal SDL3 launcher host for both engine modules.
 add_executable(echelon_launcher
+    EngineSession.cpp
     LauncherMain.cpp
     LauncherDataImport.cpp
     ${ECHELON_SOURCE_DIR}/EngineIntegration/Source/ProcessAllocator.cpp
     LauncherInstaller.cpp
-	LauncherLocalization.cpp
+    LauncherLocks.cpp
+    LauncherLocalization.cpp
     LauncherModProfiles.cpp
     LauncherMods.cpp
     LauncherSettings.cpp
+    LauncherWorkspace.cpp
 )
 
 # Echelon @build Codex 13/08/2026 Keep settings persistence testable without starting either engine module.
 add_executable(echelon_settings_tests EXCLUDE_FROM_ALL
+    EngineSession.cpp
     ${ECHELON_SOURCE_DIR}/EngineIntegration/Source/ContentLayerRuntime.cpp
     LauncherSettingsTests.cpp
     LauncherDataImport.cpp
     LauncherDownloads.cpp
     LauncherInstaller.cpp
-	LauncherLocalization.cpp
+    LauncherLocks.cpp
+    LauncherLocalization.cpp
     LauncherModProfiles.cpp
     LauncherMods.cpp
     LauncherRepositories.cpp
     LauncherS3.cpp
     LauncherSettings.cpp
+    LauncherWorkspace.cpp
 )
 
 target_compile_definitions(echelon_settings_tests PRIVATE ECHELON_ENGINE_HOSTED=1)

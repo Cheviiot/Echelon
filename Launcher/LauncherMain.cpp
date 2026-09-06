@@ -12,9 +12,12 @@
 #include "LauncherIntegration/EngineModuleAPI.h"
 #include "LauncherInstaller.h"
 #include "LauncherDataImport.h"
+#include "EngineSession.h"
 #include "LauncherModProfiles.h"
 #include "LauncherMods.h"
 #include "LauncherSettings.h"
+#include "LauncherLocks.h"
+#include "LauncherWorkspace.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_process.h>
@@ -37,6 +40,7 @@
 #include <fstream>
 #include <future>
 #include <iomanip>
+#include <initializer_list>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -123,6 +127,7 @@ struct LoadedModule
 {
 	SDL_SharedObject *handle = nullptr;
 	const EchelonEngineModuleV2 *api = nullptr;
+	const EchelonEngineModuleV3 *apiV3 = nullptr;
 };
 
 struct FolderDialogState
@@ -172,7 +177,7 @@ LauncherPaths BuildLauncherPaths()
 		root / "Launcher",
 		root / "Profiles",
 		root / "Mods",
-		root / "Launcher" / "Settings.ini"
+		root / "Launcher" / "Settings.v3.ini"
 	};
 }
 
@@ -1452,6 +1457,8 @@ LoadedModule *LoadModule(const std::string &engine, std::unordered_map<std::stri
 	}
 	const SDL_FunctionPointer function = SDL_LoadFunction(handle, EchelonBrand::kModuleExport);
 	if (!function) {
+		// Echelon @bugfix Codex 06/09/2026 Do not retain a partially loaded engine module after ABI discovery fails.
+		SDL_UnloadObject(handle);
 		errorMessage = "Engine module has no Echelon_GetEngineModuleV2 export";
 		return nullptr;
 	}
@@ -1459,10 +1466,25 @@ LoadedModule *LoadModule(const std::string &engine, std::unordered_map<std::stri
 	const EchelonEngineModuleV2 *api = getModule();
 	if (!api || api->struct_size < sizeof(EchelonEngineModuleV2) || api->abi_version != ECHELON_ENGINE_ABI_VERSION ||
 		!api->engine_id || engine != api->engine_id || !api->run || !api->query_quiescence || !api->shutdown) {
+		SDL_UnloadObject(handle);
 		errorMessage = "Engine module ABI mismatch";
 		return nullptr;
 	}
-	auto [iterator, inserted] = modules.emplace(engine, LoadedModule{handle, api});
+	const EchelonEngineModuleV3 *apiV3 = nullptr;
+	if (const SDL_FunctionPointer v3Function = SDL_LoadFunction(handle, EchelonBrand::kModuleExportV3)) {
+		auto getModuleV3 = reinterpret_cast<EchelonGetEngineModuleV3Fn>(v3Function);
+		apiV3 = getModuleV3();
+		if (!apiV3 || apiV3->struct_size < sizeof(EchelonEngineModuleV3) ||
+			apiV3->abi_version != ECHELON_ENGINE_ABI_VERSION_V3 || !apiV3->engine_id ||
+			engine != apiV3->engine_id || !apiV3->create_session || !apiV3->prepare_session ||
+			!apiV3->start_session || !apiV3->step_session || !apiV3->stop_session ||
+			!apiV3->query_session || !apiV3->destroy_session) {
+			SDL_UnloadObject(handle);
+			errorMessage = "Engine module ABI V3 mismatch";
+			return nullptr;
+		}
+	}
+	auto [iterator, inserted] = modules.emplace(engine, LoadedModule{handle, api, apiV3});
 	return inserted ? &iterator->second : nullptr;
 }
 
@@ -1486,6 +1508,59 @@ void SetEnvironment(const char *name, const std::string &value)
 	setenv(name, value.c_str(), 1);
 #endif
 }
+
+void ClearEnvironment(const char *name)
+{
+#if defined(_WIN32)
+	_putenv_s(name, "");
+#else
+	unsetenv(name);
+#endif
+}
+
+// Echelon @feature Codex 06/09/2026 Restore compatibility environment variables after every in-process engine session.
+class ScopedEnvironment
+{
+public:
+	explicit ScopedEnvironment(std::initializer_list<const char *> names)
+	{
+		for (const char *name : names) {
+			const char *value = std::getenv(name);
+			m_values.emplace_back(name, value ? std::optional<std::string>(value) : std::nullopt);
+		}
+	}
+	~ScopedEnvironment()
+	{
+		for (const auto &[name, value] : m_values) {
+			if (value) SetEnvironment(name.c_str(), *value);
+			else ClearEnvironment(name.c_str());
+		}
+	}
+
+	ScopedEnvironment(const ScopedEnvironment &) = delete;
+	ScopedEnvironment &operator=(const ScopedEnvironment &) = delete;
+
+private:
+	std::vector<std::pair<std::string, std::optional<std::string>>> m_values;
+};
+
+// Echelon @feature Codex 06/09/2026 Restore the process working directory even when engine startup exits early.
+class ScopedCurrentDirectory
+{
+public:
+	ScopedCurrentDirectory() : m_previous(fs::current_path()) {}
+	~ScopedCurrentDirectory()
+	{
+		std::error_code error;
+		fs::current_path(m_previous, error);
+	}
+
+	ScopedCurrentDirectory(const ScopedCurrentDirectory &) = delete;
+	ScopedCurrentDirectory &operator=(const ScopedCurrentDirectory &) = delete;
+
+private:
+	fs::path m_previous;
+};
 
 struct WorkerResourceSnapshot
 {
@@ -1580,7 +1655,8 @@ bool RestoreSharedWindowState(SDL_Window *window, const SharedWindowState &state
 	return true;
 }
 
-struct EngineWindowCoordinator
+// Echelon @refactor Codex 06/09/2026 Centralize window and presentation handoff behind one host service.
+struct PresentationService
 {
 	SDL_Window *window = nullptr;
 
@@ -1601,7 +1677,7 @@ struct EngineWindowCoordinator
 
 uint32_t EngineWindowModeCallback(void *userData, uint32_t windowed, uint32_t renderWidth, uint32_t renderHeight)
 {
-	auto *coordinator = static_cast<EngineWindowCoordinator *>(userData);
+	auto *coordinator = static_cast<PresentationService *>(userData);
 	return coordinator && coordinator->apply(windowed != 0, renderWidth, renderHeight) ? 1u : 0u;
 }
 
@@ -1664,39 +1740,117 @@ void LogWorkerResources(uint32_t cycle)
 	fflush(stderr);
 }
 
+bool HasLegacyModArgument(const std::vector<std::string> &arguments)
+{
+	return std::any_of(arguments.begin(), arguments.end(), [](const std::string &argument) {
+		const std::string normalized = ToLower(argument);
+		return normalized == "-mod" || normalized.compare(0, 5, "-mod=") == 0;
+	});
+}
+
+std::string EffectiveContentFingerprint(const EchelonLauncher::ModificationStack &stack)
+{
+	return stack.fingerprint.empty() ? "vanilla" : stack.fingerprint;
+}
+
+// Echelon @refactor Codex 06/09/2026 Keep the workspace/stack invariant identical during preflight and engine handoff.
+bool WorkspaceMatchesContentStack(const LauncherProfile &profile,
+	const EchelonLauncher::ModificationStack *contentStack,
+	const EchelonLauncher::WorkspaceRecord *workspaceRecord, std::string &errorMessage)
+{
+	if (!contentStack) return true;
+	if (!workspaceRecord || workspaceRecord->engine != profile.engine ||
+		workspaceRecord->layerRoots.size() != contentStack->layers.size() ||
+		workspaceRecord->fingerprint != EffectiveContentFingerprint(*contentStack)) {
+		errorMessage = "Workspace record does not match the selected content stack";
+		return false;
+	}
+	if (workspaceRecord->layerFingerprints.size() != contentStack->layers.size()) {
+		errorMessage = "Workspace record has incomplete layer fingerprints";
+		return false;
+	}
+	for (size_t index = 0; index < contentStack->layers.size(); ++index) {
+		const EchelonLauncher::InstalledModification *layer = contentStack->layers[index];
+		if (!layer || (!layer->contentFingerprint.empty() &&
+			workspaceRecord->layerFingerprints[index] != layer->contentFingerprint)) {
+			errorMessage = "Workspace record does not match the selected content layers";
+			return false;
+		}
+	}
+	return true;
+}
+
+// Echelon @refactor Codex 06/09/2026 Centralize managed-content validation before any renderer or engine transition.
+bool ValidateManagedContent(const LauncherProfile &profile, const std::vector<std::string> &arguments,
+	const EchelonLauncher::ModificationStack *contentStack,
+	const EchelonLauncher::WorkspaceRecord *workspaceRecord, std::string &errorMessage)
+{
+	errorMessage.clear();
+	if (!contentStack) return true;
+	if (HasLegacyModArgument(arguments)) {
+		errorMessage = "Managed content layers cannot be combined with the legacy -mod argument";
+		return false;
+	}
+	if (contentStack->engine != profile.engine) {
+		errorMessage = "Modification stack belongs to a different engine profile";
+		return false;
+	}
+	if (!WorkspaceMatchesContentStack(profile, contentStack, workspaceRecord, errorMessage)) return false;
+	for (const EchelonLauncher::InstalledModification *layer : contentStack->layers) {
+		std::string verificationError;
+		if (!layer || !EchelonLauncher::VerifyInstalledModification(*layer, verificationError)) {
+			if (!layer) errorMessage = "Modification stack contains a null layer";
+			else if (verificationError.empty()) errorMessage = "Modification stack contains an invalid layer";
+			else errorMessage = "Cannot verify " + layer->id + "@" + layer->version + ": " + verificationError;
+			return false;
+		}
+	}
+	return true;
+}
+
+// Echelon @feature Codex 06/09/2026 Complete launch validation while the launcher UI is still alive.
+bool PreflightProfile(LauncherProfile &profile, const std::vector<std::string> &gameArguments,
+	const EchelonLauncher::LauncherSettings &launcherSettings, bool headless,
+	std::unordered_map<std::string, LoadedModule> &modules,
+	const EchelonLauncher::ModificationStack *contentStack,
+	const EchelonLauncher::WorkspaceRecord *workspaceRecord, std::string &errorMessage)
+{
+	errorMessage.clear();
+	std::vector<std::string> arguments;
+	arguments.emplace_back(EchelonBrand::kProductSlug);
+	arguments.insert(arguments.end(), gameArguments.begin(), gameArguments.end());
+	const EchelonLauncher::ProfileLaunchSettings &profileSettings =
+		EchelonLauncher::SettingsForProfile(launcherSettings, profile.id);
+	if (!headless && !EchelonLauncher::AppendProfileArguments(profileSettings, arguments, errorMessage)) {
+		return false;
+	}
+	if (!ValidateManagedContent(profile, arguments, contentStack, workspaceRecord, errorMessage)) return false;
+	if (!LoadModule(profile.engine, modules, errorMessage)) return false;
+	if (!headless) {
+		std::string optionsError;
+		(void)EchelonLauncher::LoadGameOptions(profile.userDataRoot / "Options.ini", optionsError);
+		if (!optionsError.empty()) {
+			errorMessage = optionsError;
+			return false;
+		}
+	}
+	return true;
+}
+
 EchelonEngineResultV2 RunProfile(LauncherProfile &profile, SDL_Window *window, const std::vector<std::string> &gameArguments,
 	const EchelonLauncher::LauncherSettings &launcherSettings,
 	bool headless, uint32_t internalTestReturnAfterUpdates,
 	std::unordered_map<std::string, LoadedModule> &modules,
-	uint32_t &quiescenceFlags, std::string &errorMessage, EngineWindowCoordinator *windowCoordinator = nullptr,
-	const EchelonLauncher::ModificationStack *contentStack = nullptr)
+	uint32_t &quiescenceFlags, std::string &errorMessage, PresentationService *windowCoordinator = nullptr,
+	const EchelonLauncher::ModificationStack *contentStack = nullptr,
+	const EchelonLauncher::WorkspaceRecord *workspaceRecord = nullptr)
 {
 	quiescenceFlags = 0;
 	std::vector<std::string> arguments;
 	arguments.emplace_back(EchelonBrand::kProductSlug);
 	arguments.insert(arguments.end(), gameArguments.begin(), gameArguments.end());
-	if (contentStack && !contentStack->layers.empty()) {
-		const bool hasLegacyMod = std::any_of(arguments.begin(), arguments.end(), [](const std::string &argument) {
-			const std::string normalized = ToLower(argument);
-			return normalized == "-mod" || normalized.compare(0, 5, "-mod=") == 0;
-		});
-		if (hasLegacyMod) {
-			errorMessage = "Managed content layers cannot be combined with the legacy -mod argument";
-			return ECHELON_ENGINE_FATAL_ERROR;
-		}
-		if (contentStack->engine != profile.engine) {
-			errorMessage = "Modification stack belongs to a different engine profile";
-			return ECHELON_ENGINE_FATAL_ERROR;
-		}
-		// Echelon @bugfix Codex 14/08/2026 Rebuild every content fingerprint immediately before handing paths to the engine.
-		// A modified, truncated, or symlink-injected installation must never enter the read-only overlay under a stale manifest digest.
-		for (const EchelonLauncher::InstalledModification *layer : contentStack->layers) {
-			if (!layer || !EchelonLauncher::VerifyInstalledModification(*layer, errorMessage)) {
-				if (errorMessage.empty()) errorMessage = "Modification stack contains an invalid layer";
-				else errorMessage = layer ? ("Cannot verify " + layer->id + "@" + layer->version + ": " + errorMessage) : errorMessage;
-				return ECHELON_ENGINE_FATAL_ERROR;
-			}
-		}
+	if (!ValidateManagedContent(profile, arguments, contentStack, workspaceRecord, errorMessage)) {
+		return ECHELON_ENGINE_FATAL_ERROR;
 	}
 	LoadedModule *module = LoadModule(profile.engine, modules, errorMessage);
 	if (!module) return ECHELON_ENGINE_FATAL_ERROR;
@@ -1743,9 +1897,13 @@ EchelonEngineResultV2 RunProfile(LauncherProfile &profile, SDL_Window *window, c
 	argumentPointers.reserve(arguments.size());
 	for (std::string &argument : arguments) argumentPointers.push_back(argument.data());
 
+	ScopedEnvironment sessionEnvironment({
+		"CNC_GENERALS_INSTALLPATH", "CNC_GENERALS_PATH", "CNC_GENERALS_ZH_PATH",
+		"ECHELON_USER_DATA_ROOT", "ECHELON_DISABLED_BIG_FILES", "ECHELON_UI_LANGUAGE"});
 	SetEnvironment("CNC_GENERALS_INSTALLPATH", profile.assetRoot.string());
 	SetEnvironment("CNC_GENERALS_PATH", profile.baseAssetRoot.string());
 	if (profile.engine == kZeroHourProfileId) SetEnvironment("CNC_GENERALS_ZH_PATH", profile.assetRoot.string());
+	else ClearEnvironment("CNC_GENERALS_ZH_PATH");
 	SetEnvironment("ECHELON_USER_DATA_ROOT", profile.userDataRoot.string());
 	const bool useRussianLocalization = headless || profileSettings.russianLocalization;
 	if (!useRussianLocalization) {
@@ -1757,18 +1915,18 @@ EchelonEngineResultV2 RunProfile(LauncherProfile &profile, SDL_Window *window, c
 	SetEnvironment("ECHELON_UI_LANGUAGE",
 		profile.hasRussianLocalization && useRussianLocalization ? "ru" : "en");
 
-	const fs::path previousDirectory = fs::current_path();
+	ScopedCurrentDirectory sessionDirectory;
 	std::error_code directoryError;
 	fs::current_path(profile.assetRoot, directoryError);
 	if (directoryError) {
-		SetEnvironment("ECHELON_DISABLED_BIG_FILES", "");
 		errorMessage = "Cannot enter game data directory: " + directoryError.message();
 		return ECHELON_ENGINE_FATAL_ERROR;
 	}
 
 	EchelonEngineHostV2 host{};
 	host.struct_size = sizeof(host);
-	host.abi_version = ECHELON_ENGINE_ABI_VERSION;
+	// Echelon @feature Codex 06/09/2026 Advertise the session ABI to V3 modules while preserving V2 fallback.
+	host.abi_version = module->apiV3 ? ECHELON_ENGINE_ABI_VERSION_V3 : ECHELON_ENGINE_ABI_VERSION;
 	host.sdl_window = window;
 	host.argc = static_cast<int>(argumentPointers.size());
 	host.argv = argumentPointers.data();
@@ -1794,8 +1952,9 @@ EchelonEngineResultV2 RunProfile(LauncherProfile &profile, SDL_Window *window, c
 		contentRootPaths.reserve(contentStack->layers.size());
 		hostContentLayers.reserve(contentStack->layers.size());
 		uint32_t priority = 100;
-		for (const EchelonLauncher::InstalledModification *layer : contentStack->layers) {
-			contentRootPaths.push_back(layer->launchPath.string());
+		for (size_t index = 0; index < contentStack->layers.size(); ++index) {
+			const EchelonLauncher::InstalledModification *layer = contentStack->layers[index];
+			contentRootPaths.push_back(workspaceRecord->layerRoots[index].string());
 			uint32_t type = ECHELON_CONTENT_LAYER_MOD;
 			if (layer->type == EchelonLauncher::ModificationType::Patch) type = ECHELON_CONTENT_LAYER_PATCH;
 			else if (layer->type == EchelonLauncher::ModificationType::Addon) type = ECHELON_CONTENT_LAYER_ADDON;
@@ -1812,14 +1971,54 @@ EchelonEngineResultV2 RunProfile(LauncherProfile &profile, SDL_Window *window, c
 		host.content_layer_count, host.content_stack_fingerprint ? host.content_stack_fingerprint : "vanilla");
 	fflush(stderr);
 
-	const EchelonEngineResultV2 result = module->api->run(&host);
-	EchelonEngineQuiescenceReportV2 report{};
-	report.struct_size = sizeof(report);
-	quiescenceFlags = module->api->query_quiescence(&report);
+	EchelonEngineResultV2 result = ECHELON_ENGINE_FATAL_ERROR;
+	if (module->apiV3) {
+		EchelonEngineSessionV3 *engineSession = module->apiV3->create_session(
+			reinterpret_cast<const EchelonEngineHostV3 *>(&host));
+		if (!engineSession) {
+			errorMessage = "Engine module could not create an ABI V3 session";
+			return ECHELON_ENGINE_FATAL_ERROR;
+		}
+		EchelonEngineSessionResultV3 sessionResult{};
+		sessionResult.struct_size = sizeof(sessionResult);
+		auto copySessionError = [&]() {
+			if (sessionResult.error_message && sessionResult.error_message[0]) {
+				errorMessage = sessionResult.error_message;
+			}
+		};
+		if (!module->apiV3->prepare_session(engineSession, &sessionResult)) {
+			copySessionError();
+			module->apiV3->destroy_session(engineSession);
+			return ECHELON_ENGINE_FATAL_ERROR;
+		}
+		if (!module->apiV3->start_session(engineSession, &sessionResult)) {
+			copySessionError();
+			module->apiV3->destroy_session(engineSession);
+			return ECHELON_ENGINE_FATAL_ERROR;
+		}
+		if (!module->apiV3->step_session(engineSession, &sessionResult)) {
+			copySessionError();
+			module->apiV3->destroy_session(engineSession);
+			return ECHELON_ENGINE_FATAL_ERROR;
+		}
+		if (!module->apiV3->stop_session(engineSession, &sessionResult)) {
+			copySessionError();
+			module->apiV3->destroy_session(engineSession);
+			return ECHELON_ENGINE_FATAL_ERROR;
+		}
+		module->apiV3->query_session(engineSession, &sessionResult);
+		copySessionError();
+		result = sessionResult.result;
+		quiescenceFlags = sessionResult.quiescence_flags;
+		module->apiV3->destroy_session(engineSession);
+	} else {
+		result = module->api->run(&host);
+		EchelonEngineQuiescenceReportV2 report{};
+		report.struct_size = sizeof(report);
+		quiescenceFlags = module->api->query_quiescence(&report);
+	}
 	fprintf(stderr, "INFO: Echelon engine quiescence flags: 0x%08x\n", quiescenceFlags);
 	fflush(stderr);
-	fs::current_path(previousDirectory, directoryError);
-	SetEnvironment("ECHELON_DISABLED_BIG_FILES", "");
 	return result;
 }
 
@@ -2009,6 +2208,14 @@ int main(int argc, char **argv)
 		fprintf(stderr, "ERROR: %s\n", setupError.c_str());
 		return 1;
 	}
+	std::string instanceLockError;
+	EchelonLauncher::ScopedDirectoryLock instanceLock = EchelonLauncher::ScopedDirectoryLock::TryAcquire(
+		EchelonLauncher::MakeLockPath(paths.root, "instance", "launcher"), instanceLockError);
+	if (!instanceLock.acquired()) {
+		fprintf(stderr, "ERROR: %s\n", instanceLockError.empty() ?
+			"Another Echelon instance is already using this data root" : instanceLockError.c_str());
+		return 75;
+	}
 	const EchelonLauncher::ModificationRecoverySummary modificationRecovery =
 		EchelonLauncher::RecoverInterruptedModificationOperations(paths.mods);
 	for (const std::string &warning : modificationRecovery.warnings) {
@@ -2083,14 +2290,44 @@ int main(int argc, char **argv)
 			fprintf(stderr, "ERROR: requested profile is unavailable in %s\n", paths.root.string().c_str());
 			return 2;
 		}
+		std::string lockError;
+		EchelonLauncher::ScopedDirectoryLock profileLock = EchelonLauncher::ScopedDirectoryLock::TryAcquire(
+			EchelonLauncher::MakeLockPath(paths.root, "profile", profile->id), lockError);
+		EchelonLauncher::ScopedDirectoryLock installationLock = EchelonLauncher::ScopedDirectoryLock::TryAcquire(
+			EchelonLauncher::MakeLockPath(paths.root, "installation", profile->assetRoot.string()), lockError);
+		if (!profileLock.acquired() || !installationLock.acquired()) {
+			fprintf(stderr, "ERROR: %s\n", lockError.empty() ? "Profile or installation is already in use" : lockError.c_str());
+			return 75;
+		}
+		const EchelonLauncher::WorkspacePreparationResult workspace =
+			EchelonLauncher::PrepareContentWorkspace(paths.mods, profile->id,
+				commandLineStack ? &*commandLineStack : nullptr);
+		if (!workspace.success) {
+			fprintf(stderr, "ERROR: Cannot prepare workspace: %s\n", workspace.message.c_str());
+			return 2;
+		}
 		std::string errorMessage;
-		uint32_t quiescenceFlags = 0;
-		const EchelonEngineResultV2 result = RunProfile(
-			*profile, nullptr, parsed.engineArguments, launcherSettings, true,
-			parsed.internalTestReturnAfterUpdates, modules, quiescenceFlags, errorMessage, nullptr,
-			commandLineStack ? &*commandLineStack : nullptr);
+		EchelonLauncher::LegacyBlockingEngineSession session(
+			[&](std::string &prepareError) {
+				return PreflightProfile(*profile, parsed.engineArguments, launcherSettings, true, modules,
+					commandLineStack ? &*commandLineStack : nullptr, &workspace.record, prepareError);
+			},
+			[&]() {
+				EchelonLauncher::EngineSessionResult sessionResult;
+				sessionResult.quiescenceFlags = 0;
+				sessionResult.result = RunProfile(*profile, nullptr, parsed.engineArguments, launcherSettings, true,
+					parsed.internalTestReturnAfterUpdates, modules, sessionResult.quiescenceFlags, sessionResult.errorMessage,
+					nullptr, commandLineStack ? &*commandLineStack : nullptr, &workspace.record);
+				return sessionResult;
+			});
+		if (!session.Prepare(errorMessage)) {
+			fprintf(stderr, "ERROR: %s\n", errorMessage.c_str());
+			return 2;
+		}
+		const EchelonLauncher::EngineSessionResult sessionResult = session.Run();
+		const EchelonEngineResultV2 result = sessionResult.result;
 		for (auto &[id, module] : modules) module.api->shutdown();
-		if (!errorMessage.empty()) fprintf(stderr, "ERROR: %s\n", errorMessage.c_str());
+		if (!sessionResult.errorMessage.empty()) fprintf(stderr, "ERROR: %s\n", sessionResult.errorMessage.c_str());
 		ExitWithoutGlobalDestructors(result == ECHELON_ENGINE_FATAL_ERROR ? 1 : 0);
 	}
 
@@ -3114,6 +3351,48 @@ int main(int argc, char **argv)
 	};
 
 	auto launchProfile = [&](LauncherProfile &profile, const EchelonLauncher::ModificationStack *contentStack) {
+		std::string lockError;
+		EchelonLauncher::ScopedDirectoryLock profileLock = EchelonLauncher::ScopedDirectoryLock::TryAcquire(
+			EchelonLauncher::MakeLockPath(paths.root, "profile", profile.id), lockError);
+		EchelonLauncher::ScopedDirectoryLock installationLock = EchelonLauncher::ScopedDirectoryLock::TryAcquire(
+			EchelonLauncher::MakeLockPath(paths.root, "installation", profile.assetRoot.string()), lockError);
+		if (!profileLock.acquired() || !installationLock.acquired()) {
+			statusMessage = lockError.empty() ? Localized(russian, "Profile is already in use", "Профиль уже используется") : lockError;
+			statusError = true;
+			return;
+		}
+		const EchelonLauncher::WorkspacePreparationResult workspace =
+			EchelonLauncher::PrepareContentWorkspace(paths.mods, profile.id, contentStack);
+		if (!workspace.success) {
+			statusMessage = workspace.message.empty() ?
+				Localized(russian, "Cannot prepare content workspace", "Не удалось подготовить рабочее пространство") : workspace.message;
+			statusError = true;
+			return;
+		}
+		PresentationService windowCoordinator{window};
+		EchelonLauncher::LegacyBlockingEngineSession session(
+			[&](std::string &prepareError) {
+				return PreflightProfile(profile, parsed.engineArguments, launcherSettings, false, modules,
+					contentStack, &workspace.record, prepareError);
+			},
+			[&]() {
+				EchelonLauncher::EngineSessionResult sessionResult;
+				sessionResult.quiescenceFlags = 0;
+				sessionResult.result = RunProfile(profile, window, parsed.engineArguments, launcherSettings, false,
+					parsed.internalTestReturnAfterUpdates, modules, sessionResult.quiescenceFlags,
+					sessionResult.errorMessage, &windowCoordinator, contentStack, &workspace.record);
+				return sessionResult;
+			});
+		std::string engineError;
+		if (!session.Prepare(engineError)) {
+			statusMessage = engineError.empty() ?
+				Localized(russian, "The engine session could not be prepared", "Не удалось подготовить сессию движка") : engineError;
+			statusError = true;
+			return;
+		}
+
+		const SharedWindowState windowStateBeforeEngine = CaptureSharedWindowState(window);
+		LogSharedWindowState("launcher-before-engine", windowStateBeforeEngine);
 		uiAudio.reset();
 		modCoverCache.reset();
 		backdrop.reset();
@@ -3127,15 +3406,11 @@ int main(int argc, char **argv)
 			// Echelon @bugfix Codex 13/08/2026 Do not touch a potentially poisoned graphics connection during cleanup.
 			ExitWithoutGlobalDestructors(kWorkerExitRecoverableGraphicsFailure);
 		}
-		const SharedWindowState windowStateBeforeEngine = CaptureSharedWindowState(window);
-		LogSharedWindowState("launcher-before-engine", windowStateBeforeEngine);
 		SDL_SetWindowTitle(window, profile.nameEn.c_str());
-		std::string engineError;
-		uint32_t quiescenceFlags = 0;
-		EngineWindowCoordinator windowCoordinator{window};
-		const EchelonEngineResultV2 result = RunProfile(profile, window, parsed.engineArguments,
-			launcherSettings, false,
-			parsed.internalTestReturnAfterUpdates, modules, quiescenceFlags, engineError, &windowCoordinator, contentStack);
+		const EchelonLauncher::EngineSessionResult sessionResult = session.Run();
+		const EchelonEngineResultV2 result = sessionResult.result;
+		const uint32_t quiescenceFlags = sessionResult.quiescenceFlags;
+		engineError = sessionResult.errorMessage;
 		fprintf(stderr, "INFO: Echelon engine session result: %u\n", static_cast<unsigned int>(result));
 		fflush(stderr);
 		if (result == ECHELON_ENGINE_EXIT_APPLICATION) {
