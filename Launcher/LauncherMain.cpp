@@ -1674,6 +1674,13 @@ uint32_t EngineWindowModeCallback(void *userData, uint32_t windowed, uint32_t re
 	return coordinator && coordinator->apply(windowed != 0, renderWidth, renderHeight) ? 1u : 0u;
 }
 
+// Echelon @feature Codex 07/09/2026 Connect the ABI presentation bridge to launcher-owned lifecycle telemetry.
+void EnginePresentationEventCallback(void *userData, EchelonEnginePresentationEventV1 event, uint64_t frameIndex)
+{
+	auto *coordinator = static_cast<EchelonLauncher::PresentationService *>(userData);
+	if (coordinator) coordinator->onEngineEvent(static_cast<uint32_t>(event), frameIndex);
+}
+
 // Echelon @test Codex 14/08/2026 Make the host-owned window invariant observable in automated lifecycle tests.
 SharedWindowState CaptureSharedWindowState(SDL_Window *window)
 {
@@ -1979,6 +1986,9 @@ EchelonEngineResultV2 RunProfile(LauncherProfile &profile, SDL_Window *window, c
 		ECHELON_ENGINE_WINDOW_POLICY_HOST_OWNED;
 	host.window_mode_user_data = windowCoordinator;
 	host.window_mode_callback = windowCoordinator ? EngineWindowModeCallback : nullptr;
+	EchelonEnginePresentationBridgeV1 presentationBridge{
+		sizeof(EchelonEnginePresentationBridgeV1), windowCoordinator, EnginePresentationEventCallback};
+	host.presentation_bridge = windowCoordinator ? &presentationBridge : nullptr;
 	std::vector<std::string> contentRootPaths;
 	std::vector<EchelonContentLayerV1> hostContentLayers;
 	if (contentStack) {

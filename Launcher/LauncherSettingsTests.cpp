@@ -20,6 +20,7 @@
 #include "LauncherLocks.h"
 #include "LauncherWorkspace.h"
 #include "EngineSession.h"
+#include "PresentationService.h"
 #include "LauncherIntegration/ArchiveLoadPolicy.h"
 #include "LauncherIntegration/ContentLayerRuntime.h"
 
@@ -201,6 +202,18 @@ int main()
 	std::error_code error;
 	fs::create_directories(optionsPath.parent_path(), error);
 	Check(!error, "temporary directory must be created");
+	// Echelon @test Codex 07/09/2026 Verify the renderer-neutral bridge state without constructing a Vulkan device.
+	{
+		PresentationService presentation(reinterpret_cast<SDL_Window *>(1),
+			[](bool, uint32_t, uint32_t) { return true; });
+		presentation.onEngineEvent(ECHELON_ENGINE_PRESENTATION_STARTED_V1, 0);
+		presentation.onEngineEvent(ECHELON_ENGINE_PRESENTATION_FRAME_V1, 4);
+		Check(presentation.engineActive() && !presentation.engineQuiescent() && presentation.frameCount() == 5,
+			"presentation bridge must retain active engine frame state without graphics handles");
+		presentation.onEngineEvent(ECHELON_ENGINE_PRESENTATION_QUIESCENT_V1, 5);
+		Check(!presentation.engineActive() && presentation.engineQuiescent(),
+			"presentation bridge must expose quiescence after engine teardown");
+	}
 	// Echelon @test Codex 06/09/2026 Ensure concurrent launcher operations serialize atomically.
 	{
 		std::string lockMessage;

@@ -86,6 +86,26 @@ typedef enum EchelonEngineWindowPolicyV2
 typedef uint32_t (*EchelonEngineWindowModeCallbackV2)(
 	void *user_data, uint32_t windowed, uint32_t render_width, uint32_t render_height);
 
+// Echelon @feature Codex 07/09/2026 Carry renderer-neutral presentation events without sharing Vulkan handles.
+typedef enum EchelonEnginePresentationEventV1
+{
+	ECHELON_ENGINE_PRESENTATION_STARTED_V1 = 0,
+	ECHELON_ENGINE_PRESENTATION_FRAME_V1 = 1,
+	ECHELON_ENGINE_PRESENTATION_STOPPING_V1 = 2,
+	ECHELON_ENGINE_PRESENTATION_QUIESCENT_V1 = 3,
+	ECHELON_ENGINE_PRESENTATION_FAILED_V1 = 4
+} EchelonEnginePresentationEventV1;
+
+typedef void (*EchelonEnginePresentationEventCallbackV1)(
+	void *user_data, EchelonEnginePresentationEventV1 event, uint64_t frame_index);
+
+typedef struct EchelonEnginePresentationBridgeV1
+{
+	uint32_t struct_size;
+	void *user_data;
+	EchelonEnginePresentationEventCallbackV1 event_callback;
+} EchelonEnginePresentationBridgeV1;
+
 typedef enum EchelonContentLayerTypeV1
 {
 	ECHELON_CONTENT_LAYER_MOD = 0,
@@ -130,6 +150,8 @@ typedef struct EchelonEngineHostV2
 	// Echelon @feature Codex 07/09/2026 Optional hosted policy fields are appended for V3 without moving V2 members.
 	const char *disabled_big_files;
 	const char *ui_language;
+	// Echelon @feature Codex 07/09/2026 Optional renderer-neutral bridge appended after the V2 policy tail.
+	const EchelonEnginePresentationBridgeV1 *presentation_bridge;
 } EchelonEngineHostV2;
 
 // Echelon @feature Codex 06/09/2026 Keep the V3 host payload source-compatible while versioning the session contract.

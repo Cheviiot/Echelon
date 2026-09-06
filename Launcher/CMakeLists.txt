@@ -30,6 +30,7 @@ add_executable(echelon_settings_tests EXCLUDE_FROM_ALL
     LauncherS3.cpp
     LauncherSettings.cpp
     LauncherWorkspace.cpp
+    PresentationService.cpp
 )
 
 target_compile_definitions(echelon_settings_tests PRIVATE ECHELON_ENGINE_HOSTED=1)

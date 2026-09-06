@@ -110,6 +110,14 @@ if [[ "${actual_quiescent}" != "${expected_quiescent}" ]]; then
 	tail -n 160 "${log_file}" >&2
 	exit 1
 fi
+bridge_started="$(rg -c '\[PRESENTATION-BRIDGE\] event=started' "${log_file}" || true)"
+bridge_quiescent="$(rg -c '\[PRESENTATION-BRIDGE\] event=quiescent' "${log_file}" || true)"
+bridge_frames="$(rg -c '\[PRESENTATION-BRIDGE\] event=frame' "${log_file}" || true)"
+if [[ "${bridge_started}" != "${expected_quiescent}" || "${bridge_quiescent}" != "${expected_quiescent}" || "${bridge_frames}" -lt "${expected_quiescent}" ]]; then
+	echo "ERROR: Presentation bridge events are incomplete started=${bridge_started} frames=${bridge_frames} quiescent=${bridge_quiescent}" >&2
+	tail -n 160 "${log_file}" >&2
+	exit 1
+fi
 if ! rg -q "lifecycle test completed ${cycle_count} cycles" "${log_file}"; then
 	echo "ERROR: Lifecycle completion marker is missing" >&2
 	tail -n 160 "${log_file}" >&2

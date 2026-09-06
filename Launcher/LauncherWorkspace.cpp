@@ -57,11 +57,21 @@ void QuarantineWorkspaceStaging(const fs::path &modsRoot, const fs::path &stagin
 	const std::string &profileId)
 {
 	std::error_code error;
-	const fs::path quarantine = modsRoot / ".trash" /
-		("workspace-failed-" + SafeComponent(profileId) + "-" + std::to_string(Generation()));
+	const std::string baseName = "workspace-failed-" + SafeComponent(profileId) + "-" + std::to_string(Generation());
+	fs::path quarantine;
+	for (unsigned suffix = 0; suffix < 10000; ++suffix) {
+		const std::string suffixText = suffix == 0 ? std::string{} : "-" + std::to_string(suffix);
+		const fs::path candidate = modsRoot / ".trash" / (baseName + suffixText);
+		if (!fs::exists(candidate, error)) {
+			quarantine = candidate;
+			break;
+		}
+		if (error) break;
+	}
+	if (quarantine.empty() || error) return;
 	fs::create_directories(quarantine.parent_path(), error);
 	if (!error) fs::rename(staging, quarantine, error);
-	if (error) fs::remove_all(staging, error);
+	// Echelon @bugfix Codex 07/09/2026 Preserve staging when quarantine itself is unavailable for later recovery.
 }
 
 bool WriteRecord(const fs::path &path, const WorkspaceRecord &record, std::string &errorMessage)
@@ -400,8 +410,32 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 		return result;
 	}
 	const uint64_t generation = Generation();
-	const fs::path staging = modsRoot / ".staging" /
-		("workspace-" + SafeComponent(profileId) + "-" + SafeComponent(fingerprint) + "-" + std::to_string(generation));
+	// Echelon @bugfix Codex 07/09/2026 Do not reuse an abandoned staging name when two generations share a clock tick.
+	fs::path staging;
+	for (unsigned suffix = 0; suffix < 10000; ++suffix) {
+		const std::string suffixText = suffix == 0 ? std::string{} : "-" + std::to_string(suffix);
+		const fs::path candidate = modsRoot / ".staging" /
+			("workspace-" + SafeComponent(profileId) + "-" + SafeComponent(fingerprint) + "-" +
+				std::to_string(generation) + suffixText);
+			if (!fs::exists(candidate, error)) {
+				staging = candidate;
+				break;
+			}
+		if (error) {
+			result.diagnostic.stage = OperationStage::Staging;
+			result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+			result.diagnostic.retryable = true;
+			result.message = "Cannot inspect workspace staging path: " + error.message();
+			return result;
+		}
+	}
+	if (staging.empty()) {
+		result.diagnostic.stage = OperationStage::Staging;
+		result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+		result.diagnostic.retryable = true;
+		result.message = "Cannot allocate a unique workspace staging path";
+		return result;
+	}
 	fs::create_directories(staging, error);
 	if (error) {
 		result.diagnostic.stage = OperationStage::Staging;
@@ -443,7 +477,8 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 	bool oldWorkspaceQuarantined = false;
 	targetError.clear();
 	const fs::file_status targetStatus = fs::symlink_status(target, targetError);
-	if (targetError == std::make_error_code(std::errc::no_such_file_or_directory)) targetError.clear();
+	if (targetStatus.type() == fs::file_type::not_found ||
+		targetError == std::make_error_code(std::errc::no_such_file_or_directory)) targetError.clear();
 	if (targetError) {
 		result.diagnostic.stage = OperationStage::Recover;
 		result.diagnostic.code = OperationErrorCode::FilesystemFailure;

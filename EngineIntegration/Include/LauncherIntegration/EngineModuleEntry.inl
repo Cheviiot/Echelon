@@ -80,6 +80,21 @@ static void EchelonModulePhase(
 	}
 }
 
+// Echelon @feature Codex 07/09/2026 Keep presentation notifications opaque to the engine renderer and Vulkan implementation.
+static void EchelonModulePresentationEvent(const EchelonEngineHostV2 *host,
+	EchelonEnginePresentationEventV1 event, uint64_t frameIndex = 0)
+{
+	if (!host || host->struct_size < offsetof(EchelonEngineHostV2, presentation_bridge) +
+		sizeof(host->presentation_bridge) || !host->presentation_bridge) return;
+	const EchelonEnginePresentationBridgeV1 *bridge = host->presentation_bridge;
+	if (bridge->struct_size < sizeof(EchelonEnginePresentationBridgeV1) || !bridge->event_callback) return;
+	try {
+		bridge->event_callback(bridge->user_data, event, frameIndex);
+	} catch (...) {
+		// Presentation telemetry must never interrupt engine teardown or frame execution.
+	}
+}
+
 static uint32_t EchelonCollectQuiescenceFlags()
 {
 	uint32_t flags = 0;
@@ -172,8 +187,10 @@ static EchelonEngineResultV2 EchelonModuleRun(const EchelonEngineHostV2 *host)
 		}
 
 		CommandLine::parseCommandLineForStartup();
+		EchelonModulePresentationEvent(host, ECHELON_ENGINE_PRESENTATION_STARTED_V1);
 		EchelonModulePhase(host, ECHELON_ENGINE_PHASE_RUNNING, "Engine session is running");
 		const Int exitCode = GameMain();
+		EchelonModulePresentationEvent(host, ECHELON_ENGINE_PRESENTATION_STOPPING_V1);
 		EchelonModulePhase(host, ECHELON_ENGINE_PHASE_STOPPING, "Engine session is stopping");
 
 		TheSDL3Window = nullptr;
@@ -188,12 +205,15 @@ static EchelonEngineResultV2 EchelonModuleRun(const EchelonEngineHostV2 *host)
 		if ((s_echelonQuiescenceFlags & ECHELON_ENGINE_REQUIRED_QUIESCENCE_FLAGS) !=
 			ECHELON_ENGINE_REQUIRED_QUIESCENCE_FLAGS) {
 			EchelonModuleLog(host, "ERROR: Engine did not reach a quiescent state");
+			EchelonModulePresentationEvent(host, ECHELON_ENGINE_PRESENTATION_FAILED_V1);
 			EchelonModulePhase(host, ECHELON_ENGINE_PHASE_FAILED, "Engine teardown is incomplete");
 			return ECHELON_ENGINE_FATAL_ERROR;
 		}
+		EchelonModulePresentationEvent(host, ECHELON_ENGINE_PRESENTATION_QUIESCENT_V1);
 		EchelonModulePhase(host, ECHELON_ENGINE_PHASE_QUIESCENT, "Engine session is quiescent");
 
 		if (exitCode != 0) {
+			EchelonModulePresentationEvent(host, ECHELON_ENGINE_PRESENTATION_FAILED_V1);
 			EchelonModuleLog(host, "ERROR: Engine session failed");
 			return ECHELON_ENGINE_FATAL_ERROR;
 		}
@@ -214,6 +234,7 @@ static EchelonEngineResultV2 EchelonModuleRun(const EchelonEngineHostV2 *host)
 	EchelonContentRuntime::Clear();
 	EchelonClearHostedRuntimeContext();
 	s_echelonQuiescenceFlags = EchelonCollectQuiescenceFlags();
+	EchelonModulePresentationEvent(host, ECHELON_ENGINE_PRESENTATION_FAILED_V1);
 	EchelonModulePhase(host, ECHELON_ENGINE_PHASE_FAILED, "Engine session failed");
 	return ECHELON_ENGINE_FATAL_ERROR;
 }
@@ -225,6 +246,7 @@ struct EchelonEngineSessionV3
 	EchelonEngineSessionStateV3 state = ECHELON_ENGINE_SESSION_CREATED_V3;
 	EchelonEngineResultV2 result = ECHELON_ENGINE_FATAL_ERROR;
 	uint32_t quiescenceFlags = 0;
+	uint64_t frameIndex = 0;
 	uint32_t errorCode = ECHELON_ENGINE_SESSION_ERROR_NONE_V3;
 	std::string errorMessage;
 	bool nativeLifecycle = false;
@@ -324,6 +346,7 @@ static bool EchelonStartNativeGame(const EchelonEngineHostV3 *host, std::string 
 static EchelonEngineResultV2 EchelonFinishNativeGame(const EchelonEngineHostV2 *host, Int exitCode,
 	uint32_t &quiescenceFlags, std::string &errorMessage)
 {
+	EchelonModulePresentationEvent(host, ECHELON_ENGINE_PRESENTATION_STOPPING_V1);
 	EchelonModulePhase(host, ECHELON_ENGINE_PHASE_STOPPING, "Engine session is stopping");
 	try {
 		if (TheFramePacer) {
@@ -346,13 +369,16 @@ static EchelonEngineResultV2 EchelonFinishNativeGame(const EchelonEngineHostV2 *
 	if ((quiescenceFlags & ECHELON_ENGINE_REQUIRED_QUIESCENCE_FLAGS) !=
 		ECHELON_ENGINE_REQUIRED_QUIESCENCE_FLAGS) {
 		if (errorMessage.empty()) errorMessage = "Engine did not reach quiescence";
+		EchelonModulePresentationEvent(host, ECHELON_ENGINE_PRESENTATION_FAILED_V1);
 		EchelonModulePhase(host, ECHELON_ENGINE_PHASE_FAILED, "Engine teardown is incomplete");
 		return ECHELON_ENGINE_FATAL_ERROR;
 	}
 	if (exitCode != 0 || !errorMessage.empty()) {
+		EchelonModulePresentationEvent(host, ECHELON_ENGINE_PRESENTATION_FAILED_V1);
 		EchelonModulePhase(host, ECHELON_ENGINE_PHASE_FAILED, "Engine session failed");
 		return ECHELON_ENGINE_FATAL_ERROR;
 	}
+	EchelonModulePresentationEvent(host, ECHELON_ENGINE_PRESENTATION_QUIESCENT_V1);
 	EchelonModulePhase(host, ECHELON_ENGINE_PHASE_QUIESCENT, "Engine session is quiescent");
 	return s_echelonReturnRequested ? ECHELON_ENGINE_RETURN_TO_LAUNCHER : ECHELON_ENGINE_EXIT_APPLICATION;
 }
@@ -419,6 +445,7 @@ static uint32_t EchelonModuleStartSession(EchelonEngineSessionV3 *session,
 	session->state = ECHELON_ENGINE_SESSION_RUNNING_V3;
 	session->result = ECHELON_ENGINE_RETURN_TO_LAUNCHER;
 	EchelonModulePhase(&session->host, ECHELON_ENGINE_PHASE_RUNNING, "Engine session is running");
+	EchelonModulePresentationEvent(&session->host, ECHELON_ENGINE_PRESENTATION_STARTED_V1);
 	if (TheGlobalData && !TheGlobalData->m_simulateReplays.empty()) {
 		const Int replayResult = ReplaySimulation::simulateReplays(
 			TheGlobalData->m_simulateReplays, TheGlobalData->m_simulateReplayJobs);
@@ -456,6 +483,8 @@ static uint32_t EchelonModuleStepSession(EchelonEngineSessionV3 *session,
 	try {
 		TheGameEngine->update();
 		TheFramePacer->update();
+		const uint64_t frameIndex = session->frameIndex++;
+		EchelonModulePresentationEvent(&session->host, ECHELON_ENGINE_PRESENTATION_FRAME_V1, frameIndex);
 		if (TheGameEngine->getQuitting()) {
 			session->result = s_echelonReturnRequested ? ECHELON_ENGINE_RETURN_TO_LAUNCHER :
 				ECHELON_ENGINE_EXIT_APPLICATION;

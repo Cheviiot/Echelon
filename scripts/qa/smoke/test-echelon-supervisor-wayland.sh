@@ -40,6 +40,8 @@ qa_root="${qa_root}" launcher="${launcher}" dxvk_dir="${dxvk_dir}" dbus-run-sess
 	set -euo pipefail
 	unset DISPLAY WAYLAND_DISPLAY
 	export XDG_RUNTIME_DIR="${qa_root}/runtime"
+	# Keep the headless Mutter KMS worker in userspace; some CI/container kernels crash the realtime worker.
+	export MUTTER_DEBUG_KMS_THREAD_TYPE=user
 	mutter --headless --wayland --no-x11 --wayland-display=echelon-supervisor-wl --virtual-monitor 1280x800 \
 		>"${qa_root}/mutter.log" 2>&1 &
 	compositor_pid=$!
