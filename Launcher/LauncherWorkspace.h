@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "LauncherDiagnostics.h"
 #include "LauncherMods.h"
 
 #include <cstdint>
@@ -41,6 +42,7 @@ struct WorkspacePreparationResult
 	bool reused = false;
 	std::string message;
 	WorkspaceRecord record;
+	OperationDiagnostic diagnostic;
 };
 
 // Echelon @feature Codex 06/09/2026 Publish an immutable content snapshot before an engine session.

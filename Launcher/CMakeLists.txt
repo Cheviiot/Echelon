@@ -11,6 +11,7 @@ add_executable(echelon_launcher
     LauncherMods.cpp
     LauncherSettings.cpp
     LauncherWorkspace.cpp
+    PresentationService.cpp
 )
 
 # Echelon @build Codex 13/08/2026 Keep settings persistence testable without starting either engine module.

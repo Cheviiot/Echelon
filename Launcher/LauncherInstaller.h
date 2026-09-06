@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "LauncherDiagnostics.h"
 #include "LauncherMods.h"
 
 #include <atomic>
@@ -54,6 +55,7 @@ struct ModificationOperationResult
 	std::string message;
 	std::string selectionKey;
 	std::filesystem::path installedRoot;
+	OperationDiagnostic diagnostic;
 };
 
 struct ModificationRecoverySummary

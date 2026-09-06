@@ -612,6 +612,9 @@ ModificationOperationResult ImportLocalModification(const LocalImportRequest &re
 	ModificationOperationProgress *progress)
 {
 	ModificationOperationResult result;
+	result.diagnostic.profileId = request.engine;
+	result.diagnostic.affectedPath = request.inputPath;
+	result.diagnostic.code = OperationErrorCode::InvalidInput;
 	std::error_code error;
 	const bool inputIsDirectory = fs::is_directory(request.inputPath, error);
 	const bool inputIsFile = fs::is_regular_file(request.inputPath, error);
@@ -648,11 +651,15 @@ ModificationOperationResult ImportLocalModification(const LocalImportRequest &re
 	ScopedDirectoryLock contentLock = ScopedDirectoryLock::TryAcquire(
 		MakeLockPath(request.modsRoot, "content", "operation"), lockError);
 	if (!contentLock.acquired()) {
+		result.diagnostic.stage = OperationStage::Lock;
+		result.diagnostic.code = OperationErrorCode::LockBusy;
+		result.diagnostic.retryable = true;
 		result.message = lockError.empty() ? "Another content operation is already active" : lockError;
 		return result;
 	}
 	std::string inputDigest;
 	if (inputIsFile && !request.expectedSha256.empty()) {
+		result.diagnostic.stage = OperationStage::Verify;
 		inputDigest = DigestFile(request.inputPath, result.message, nullptr);
 		if (inputDigest.empty() || inputDigest != ToLower(request.expectedSha256)) {
 			if (result.message.empty()) result.message = "Downloaded package SHA-256 does not match its catalog";
@@ -661,11 +668,18 @@ ModificationOperationResult ImportLocalModification(const LocalImportRequest &re
 	}
 	const fs::path stagingRoot = UniqueStagingPath(request.modsRoot);
 	if (stagingRoot.empty()) {
+		result.diagnostic.stage = OperationStage::Staging;
+		result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+		result.diagnostic.retryable = true;
 		result.message = "Cannot allocate a staging operation";
 		return result;
 	}
 	fs::create_directories(stagingRoot / "content", error);
 	if (error) {
+		result.diagnostic.stage = OperationStage::Staging;
+		result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+		result.diagnostic.retryable = true;
+		result.diagnostic.workspace = stagingRoot;
 		result.message = "Cannot create staging directory: " + error.message();
 		return result;
 	}
@@ -691,6 +705,10 @@ ModificationOperationResult ImportLocalModification(const LocalImportRequest &re
 	}
 	if (!copied) {
 		result.cancelled = Cancelled(progress);
+		result.diagnostic.stage = OperationStage::Staging;
+		result.diagnostic.code = result.cancelled ? OperationErrorCode::InvalidInput : OperationErrorCode::FilesystemFailure;
+		result.diagnostic.workspace = stagingRoot;
+		result.diagnostic.retryable = result.cancelled;
 		result.message = operationError.empty() ? "Cannot import modification content" : operationError;
 		RecordFailure(stagingRoot, result.message);
 		return result;
@@ -698,6 +716,9 @@ ModificationOperationResult ImportLocalModification(const LocalImportRequest &re
 	std::string fingerprint;
 	std::string indexText;
 	if (!BuildContentIndex(stagingRoot / "content", fingerprint, indexText, operationError, progress)) {
+		result.diagnostic.stage = OperationStage::Verify;
+		result.diagnostic.code = OperationErrorCode::IntegrityFailure;
+		result.diagnostic.workspace = stagingRoot;
 		result.cancelled = Cancelled(progress);
 		result.message = operationError;
 		RecordFailure(stagingRoot, result.message);
@@ -708,6 +729,10 @@ ModificationOperationResult ImportLocalModification(const LocalImportRequest &re
 	if (!request.coverImagePath.empty() && fs::is_regular_file(request.coverImagePath, error)) {
 		coverImage = "cover.image";
 		if (!CopyRegularFile(request.coverImagePath, stagingRoot / coverImage, operationError, nullptr)) {
+			result.diagnostic.stage = OperationStage::Staging;
+			result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+			result.diagnostic.workspace = stagingRoot;
+			result.diagnostic.retryable = true;
 			result.message = "Cannot preserve modification cover: " + operationError;
 			RecordFailure(stagingRoot, result.message);
 			return result;
@@ -725,6 +750,10 @@ ModificationOperationResult ImportLocalModification(const LocalImportRequest &re
 			<< coverImage << "\nSHA256="
 			<< inputDigest << "\nContentFingerprint=" << fingerprint << '\n';
 		if (!index || !manifest) {
+			result.diagnostic.stage = OperationStage::Staging;
+			result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+			result.diagnostic.workspace = stagingRoot;
+			result.diagnostic.retryable = true;
 			result.message = "Cannot write installation metadata";
 			RecordFailure(stagingRoot, result.message);
 			return result;
@@ -733,6 +762,9 @@ ModificationOperationResult ImportLocalModification(const LocalImportRequest &re
 	const fs::path target = request.modsRoot / "Installed" / request.engine / ModificationTypeName(request.type) /
 		Slugify(id) / Slugify(version);
 	if (fs::exists(target, error)) {
+		result.diagnostic.stage = OperationStage::Publish;
+		result.diagnostic.code = OperationErrorCode::Conflict;
+		result.diagnostic.affectedPath = target;
 		result.message = "This modification version is already installed";
 		RecordFailure(stagingRoot, result.message);
 		return result;
@@ -740,11 +772,20 @@ ModificationOperationResult ImportLocalModification(const LocalImportRequest &re
 	fs::create_directories(target.parent_path(), error);
 	if (!error) fs::rename(stagingRoot, target, error);
 	if (error) {
+		result.diagnostic.stage = OperationStage::Publish;
+		result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+		result.diagnostic.workspace = stagingRoot;
+		result.diagnostic.affectedPath = target;
+		result.diagnostic.retryable = true;
 		result.message = "Cannot publish installation atomically: " + error.message();
 		RecordFailure(stagingRoot, result.message);
 		return result;
 	}
 	result.success = true;
+	result.diagnostic.stage = OperationStage::Publish;
+	result.diagnostic.code = OperationErrorCode::None;
+	result.diagnostic.workspace = target;
+	result.diagnostic.retryable = false;
 	result.message = "Modification installed";
 	result.selectionKey = id + "@" + ToLower(version);
 	result.installedRoot = target;
@@ -755,10 +796,15 @@ ModificationOperationResult MoveInstalledModificationToTrash(const fs::path &mod
 	const InstalledModification &modification)
 {
 	ModificationOperationResult result;
+	result.diagnostic.profileId = modification.engine;
+	result.diagnostic.affectedPath = modification.manifestPath;
 	std::string lockError;
 	ScopedDirectoryLock contentLock = ScopedDirectoryLock::TryAcquire(
 		MakeLockPath(modsRoot, "content", "operation"), lockError);
 	if (!contentLock.acquired()) {
+		result.diagnostic.stage = OperationStage::Lock;
+		result.diagnostic.code = OperationErrorCode::LockBusy;
+		result.diagnostic.retryable = true;
 		result.message = lockError.empty() ? "Another content operation is already active" : lockError;
 		return result;
 	}
@@ -766,6 +812,8 @@ ModificationOperationResult MoveInstalledModificationToTrash(const fs::path &mod
 	const fs::path installedRoot = fs::weakly_canonical(modsRoot / "Installed", error);
 	const fs::path versionRoot = fs::weakly_canonical(modification.manifestPath.parent_path(), error);
 	if (error || !IsInsideRoot(versionRoot, installedRoot)) {
+		result.diagnostic.stage = OperationStage::Validate;
+		result.diagnostic.code = OperationErrorCode::InvalidInput;
 		result.message = "Refusing to remove content outside Mods/Installed";
 		return result;
 	}
@@ -774,10 +822,16 @@ ModificationOperationResult MoveInstalledModificationToTrash(const fs::path &mod
 	fs::create_directories(trashRoot.parent_path(), error);
 	if (!error) fs::rename(versionRoot, trashRoot, error);
 	if (error) {
+		result.diagnostic.stage = OperationStage::Publish;
+		result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+		result.diagnostic.retryable = true;
 		result.message = "Cannot move modification to recoverable trash: " + error.message();
 		return result;
 	}
 	result.success = true;
+	result.diagnostic.stage = OperationStage::Publish;
+	result.diagnostic.code = OperationErrorCode::None;
+	result.diagnostic.workspace = trashRoot;
 	result.message = "Modification moved to recoverable trash";
 	result.installedRoot = trashRoot;
 	return result;
@@ -865,10 +919,14 @@ std::vector<RecoverableModification> ListRecoverableModifications(const fs::path
 ModificationOperationResult RestoreModificationFromTrash(const fs::path &modsRoot, const fs::path &trashPath)
 {
 	ModificationOperationResult result;
+	result.diagnostic.affectedPath = trashPath;
 	std::string lockError;
 	ScopedDirectoryLock contentLock = ScopedDirectoryLock::TryAcquire(
 		MakeLockPath(modsRoot, "content", "operation"), lockError);
 	if (!contentLock.acquired()) {
+		result.diagnostic.stage = OperationStage::Lock;
+		result.diagnostic.code = OperationErrorCode::LockBusy;
+		result.diagnostic.retryable = true;
 		result.message = lockError.empty() ? "Another content operation is already active" : lockError;
 		return result;
 	}
@@ -876,6 +934,8 @@ ModificationOperationResult RestoreModificationFromTrash(const fs::path &modsRoo
 	const fs::path canonicalTrashRoot = fs::weakly_canonical(modsRoot / ".trash", error);
 	const fs::path canonicalSource = fs::weakly_canonical(trashPath, error);
 	if (error || canonicalSource.parent_path() != canonicalTrashRoot || !fs::is_directory(canonicalSource, error)) {
+		result.diagnostic.stage = OperationStage::Validate;
+		result.diagnostic.code = OperationErrorCode::InvalidInput;
 		result.message = "Refusing to restore content outside Mods/.trash";
 		return result;
 	}
@@ -896,12 +956,18 @@ ModificationOperationResult RestoreModificationFromTrash(const fs::path &modsRoo
 	}
 	const fs::path target = modsRoot / "Installed" / engine / type / Slugify(id) / Slugify(version);
 	if (fs::exists(target, error)) {
+		result.diagnostic.stage = OperationStage::Publish;
+		result.diagnostic.code = OperationErrorCode::Conflict;
+		result.diagnostic.affectedPath = target;
 		result.message = "This modification version is already installed";
 		return result;
 	}
 	fs::create_directories(target.parent_path(), error);
 	if (!error) fs::rename(canonicalSource, target, error);
 	if (error) {
+		result.diagnostic.stage = OperationStage::Publish;
+		result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+		result.diagnostic.retryable = true;
 		result.message = "Cannot restore modification atomically: " + error.message();
 		return result;
 	}
@@ -914,6 +980,9 @@ ModificationOperationResult RestoreModificationFromTrash(const fs::path &modsRoo
 		return result;
 	}
 	result.success = true;
+	result.diagnostic.stage = OperationStage::Publish;
+	result.diagnostic.code = OperationErrorCode::None;
+	result.diagnostic.workspace = target;
 	result.message = "Modification restored";
 	result.selectionKey = selection;
 	result.installedRoot = target;
@@ -924,10 +993,15 @@ ModificationOperationResult ReplaceModificationCover(const fs::path &modsRoot,
 	const InstalledModification &modification, const fs::path &imagePath)
 {
 	ModificationOperationResult result;
+	result.diagnostic.profileId = modification.engine;
+	result.diagnostic.affectedPath = imagePath;
 	std::string lockError;
 	ScopedDirectoryLock contentLock = ScopedDirectoryLock::TryAcquire(
 		MakeLockPath(modsRoot, "content", "operation"), lockError);
 	if (!contentLock.acquired()) {
+		result.diagnostic.stage = OperationStage::Lock;
+		result.diagnostic.code = OperationErrorCode::LockBusy;
+		result.diagnostic.retryable = true;
 		result.message = lockError.empty() ? "Another content operation is already active" : lockError;
 		return result;
 	}
@@ -1002,6 +1076,9 @@ ModificationOperationResult ReplaceModificationCover(const fs::path &modsRoot,
 		fs::remove(modification.coverImagePath, error);
 	}
 	result.success = true;
+	result.diagnostic.stage = OperationStage::Publish;
+	result.diagnostic.code = OperationErrorCode::None;
+	result.diagnostic.workspace = versionRoot;
 	result.message = "Modification cover updated";
 	result.selectionKey = ModificationSelectionKey(modification);
 	result.installedRoot = versionRoot;

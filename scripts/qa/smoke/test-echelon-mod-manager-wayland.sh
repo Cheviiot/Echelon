@@ -26,8 +26,8 @@ mods_root="${qa_home}/.Echelon/Mods"
 mkdir -p "${qa_root}/runtime" "${qa_home}/.Echelon/Launcher" \
 	"${mods_root}/Profiles" "${mods_root}/Cache/Repositories/qa"
 chmod 700 "${qa_root}/runtime"
-printf '%s\n' '[Launcher]' 'SchemaVersion=1' 'WindowMode=windowed' 'WindowWidth=1280' 'WindowHeight=800' \
-	>"${qa_home}/.Echelon/Launcher/Settings.ini"
+printf '%s\n' '[Launcher]' 'SchemaVersion=3' 'WindowMode=windowed' 'WindowWidth=1280' 'WindowHeight=800' \
+	>"${qa_home}/.Echelon/Launcher/Settings.v3.ini"
 
 make_fixture() {
 	local type="$1" id="$2" name="$3" parent="$4" version="$5"

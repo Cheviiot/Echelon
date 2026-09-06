@@ -44,16 +44,25 @@ bool LegacyBlockingEngineSession::Prepare(std::string &errorMessage)
 EngineSessionResult LegacyBlockingEngineSession::Run()
 {
 	EngineSessionResult result;
+	result.diagnostic.stage = OperationStage::Run;
 	if (m_state != EngineSessionState::Prepared || !m_run) {
+		result.diagnostic.stage = OperationStage::Prepare;
+		result.diagnostic.code = OperationErrorCode::InvalidInput;
 		result.errorMessage = "Engine session was not prepared";
 		m_state = EngineSessionState::Failed;
 		return result;
 	}
 	m_state = EngineSessionState::Running;
 	result = m_run();
+	result.diagnostic.stage = result.result == ECHELON_ENGINE_FATAL_ERROR ? OperationStage::Stop : OperationStage::Quiescent;
+	if (result.result == ECHELON_ENGINE_FATAL_ERROR && result.diagnostic.code == OperationErrorCode::None) {
+		result.diagnostic.code = OperationErrorCode::EngineFailure;
+	}
 	m_state = EngineSessionState::Stopping;
 	if ((result.quiescenceFlags & ECHELON_ENGINE_REQUIRED_QUIESCENCE_FLAGS) !=
 		ECHELON_ENGINE_REQUIRED_QUIESCENCE_FLAGS) {
+		result.diagnostic.stage = OperationStage::Quiescent;
+		result.diagnostic.code = OperationErrorCode::NotQuiescent;
 		if (result.errorMessage.empty()) result.errorMessage = "Engine session did not reach quiescence";
 		m_state = EngineSessionState::Failed;
 		return result;

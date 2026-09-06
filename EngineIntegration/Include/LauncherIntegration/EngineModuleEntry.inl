@@ -3,6 +3,8 @@
 #include <new>
 #include <string>
 
+#include "Common/ReplaySimulation.h"
+
 static bool s_echelonModuleInitialized = false;
 
 static void EchelonModuleLog(const EchelonEngineHostV2 *host, const char *message)
@@ -185,6 +187,8 @@ struct EchelonEngineSessionV3
 	uint32_t quiescenceFlags = 0;
 	uint32_t errorCode = ECHELON_ENGINE_SESSION_ERROR_NONE_V3;
 	std::string errorMessage;
+	bool nativeLifecycle = false;
+	bool nativeFinished = false;
 };
 
 static void EchelonSessionWriteResult(const EchelonEngineSessionV3 *session,
@@ -208,6 +212,122 @@ static EchelonEngineSessionV3 *EchelonModuleCreateSession(const EchelonEngineHos
 	if (!session) return nullptr;
 	session->host = *host;
 	return session;
+}
+
+// Echelon @feature Codex 07/09/2026 Split the hosted engine bootstrap from GameMain so V3 can own one frame at a time.
+static void EchelonConfigureHostedRuntime(const EchelonEngineHostV2 *host)
+{
+	__argc = host->argc;
+	__argv = host->argv;
+	TheSDL3Window = static_cast<SDL_Window *>(host->sdl_window);
+	ApplicationHWnd = reinterpret_cast<HWND>(TheSDL3Window);
+	s_echelonLauncherSession = host->headless == 0;
+	DX8Wrapper::Set_Window_Geometry_Externally_Owned(
+		host->window_policy == ECHELON_ENGINE_WINDOW_POLICY_HOST_OWNED);
+	DX8Wrapper::Set_Window_Mode_Request_Callback(
+		DX8Wrapper::Is_Window_Geometry_Externally_Owned() ? EchelonRequestWindowMode : nullptr,
+		DX8Wrapper::Is_Window_Geometry_Externally_Owned() ? const_cast<EchelonEngineHostV2 *>(host) : nullptr);
+	s_echelonReturnRequested = false;
+	s_echelonTestReturnUpdates = host->internal_test_return_after_updates;
+	s_echelonQuiescenceFlags = 0;
+
+	if (host->asset_root && host->asset_root[0]) {
+		setenv("CNC_GENERALS_INSTALLPATH", host->asset_root, 1);
+#if RTS_GENERALS
+		setenv("CNC_GENERALS_PATH", host->asset_root, 1);
+#else
+		setenv("CNC_GENERALS_ZH_PATH", host->asset_root, 1);
+#endif
+	}
+#if !RTS_GENERALS
+	if (host->base_asset_root && host->base_asset_root[0]) {
+		setenv("CNC_GENERALS_PATH", host->base_asset_root, 1);
+	}
+#endif
+	if (host->user_data_root && host->user_data_root[0]) {
+		setenv("ECHELON_USER_DATA_ROOT", host->user_data_root, 1);
+	}
+	CommandLine::parseCommandLineForStartup();
+}
+
+static void EchelonResetHostedRuntime()
+{
+	TheSDL3Window = nullptr;
+	ApplicationHWnd = nullptr;
+	s_echelonLauncherSession = false;
+	DX8Wrapper::Set_Window_Mode_Request_Callback(nullptr, nullptr);
+	DX8Wrapper::Set_Window_Geometry_Externally_Owned(false);
+	s_echelonTestReturnUpdates = 0;
+}
+
+static bool EchelonStartNativeGame(const EchelonEngineHostV3 *host, std::string &errorMessage)
+{
+	try {
+		std::string contentError;
+		if (!EchelonContentRuntime::Configure(host->content_layers, host->content_layer_count, contentError)) {
+			errorMessage = contentError.empty() ? "Engine content stack validation failed" : contentError;
+			return false;
+		}
+		if (!EchelonModuleInitialize(host)) {
+			errorMessage = "Engine module initialization failed";
+			return false;
+		}
+		EchelonConfigureHostedRuntime(host);
+		TheFramePacer = NEW FramePacer();
+		TheFramePacer->enableFramesPerSecondLimit(TRUE);
+		TheGameEngine = CreateGameEngine();
+		if (!TheGameEngine) {
+			errorMessage = "Engine factory returned no game engine";
+			return false;
+		}
+		TheGameEngine->init();
+		if (!TheGlobalData) {
+			errorMessage = "Engine did not initialize global data";
+			return false;
+		}
+		return true;
+	} catch (const std::exception &error) {
+		errorMessage = error.what();
+	} catch (...) {
+		errorMessage = "Unknown exception while starting the engine";
+	}
+	return false;
+}
+
+static EchelonEngineResultV2 EchelonFinishNativeGame(const EchelonEngineHostV2 *host, Int exitCode,
+	uint32_t &quiescenceFlags, std::string &errorMessage)
+{
+	EchelonModulePhase(host, ECHELON_ENGINE_PHASE_STOPPING, "Engine session is stopping");
+	try {
+		if (TheFramePacer) {
+			delete TheFramePacer;
+			TheFramePacer = nullptr;
+		}
+		if (TheGameEngine) {
+			delete TheGameEngine;
+			TheGameEngine = nullptr;
+		}
+	} catch (const std::exception &error) {
+		errorMessage = error.what();
+	} catch (...) {
+		errorMessage = "Unknown exception while stopping the engine";
+	}
+	EchelonResetHostedRuntime();
+	EchelonContentRuntime::Clear();
+	s_echelonQuiescenceFlags = EchelonCollectQuiescenceFlags();
+	quiescenceFlags = s_echelonQuiescenceFlags;
+	if ((quiescenceFlags & ECHELON_ENGINE_REQUIRED_QUIESCENCE_FLAGS) !=
+		ECHELON_ENGINE_REQUIRED_QUIESCENCE_FLAGS) {
+		if (errorMessage.empty()) errorMessage = "Engine did not reach quiescence";
+		EchelonModulePhase(host, ECHELON_ENGINE_PHASE_FAILED, "Engine teardown is incomplete");
+		return ECHELON_ENGINE_FATAL_ERROR;
+	}
+	if (exitCode != 0 || !errorMessage.empty()) {
+		EchelonModulePhase(host, ECHELON_ENGINE_PHASE_FAILED, "Engine session failed");
+		return ECHELON_ENGINE_FATAL_ERROR;
+	}
+	EchelonModulePhase(host, ECHELON_ENGINE_PHASE_QUIESCENT, "Engine session is quiescent");
+	return s_echelonReturnRequested ? ECHELON_ENGINE_RETURN_TO_LAUNCHER : ECHELON_ENGINE_EXIT_APPLICATION;
 }
 
 static uint32_t EchelonModulePrepareSession(EchelonEngineSessionV3 *session,
@@ -257,13 +377,30 @@ static uint32_t EchelonModuleStartSession(EchelonEngineSessionV3 *session,
 		EchelonSessionWriteResult(session, result);
 		return 0;
 	}
-	session->state = ECHELON_ENGINE_SESSION_RUNNING_V3;
-	session->result = EchelonModuleRun(&session->host);
-	session->quiescenceFlags = EchelonModuleQueryQuiescence(nullptr);
-	session->state = ECHELON_ENGINE_SESSION_STOPPING_V3;
-	if (session->result == ECHELON_ENGINE_FATAL_ERROR) {
+	std::string startupError;
+	if (!EchelonStartNativeGame(&session->host, startupError)) {
+		session->state = ECHELON_ENGINE_SESSION_FAILED_V3;
 		session->errorCode = ECHELON_ENGINE_SESSION_ERROR_LEGACY_RUN_V3;
-		session->errorMessage = "Legacy engine run failed";
+		session->errorMessage = startupError.empty() ? "Engine session startup failed" : startupError;
+		uint32_t ignoredFlags = 0;
+		std::string ignoredError;
+		EchelonFinishNativeGame(&session->host, ECHELON_ENGINE_FATAL_ERROR, ignoredFlags, ignoredError);
+		EchelonSessionWriteResult(session, result);
+		return 0;
+	}
+	session->nativeLifecycle = true;
+	session->state = ECHELON_ENGINE_SESSION_RUNNING_V3;
+	session->result = ECHELON_ENGINE_RETURN_TO_LAUNCHER;
+	EchelonModulePhase(&session->host, ECHELON_ENGINE_PHASE_RUNNING, "Engine session is running");
+	if (TheGlobalData && !TheGlobalData->m_simulateReplays.empty()) {
+		const Int replayResult = ReplaySimulation::simulateReplays(
+			TheGlobalData->m_simulateReplays, TheGlobalData->m_simulateReplayJobs);
+		session->result = replayResult == 0 ? ECHELON_ENGINE_EXIT_APPLICATION : ECHELON_ENGINE_FATAL_ERROR;
+		session->state = ECHELON_ENGINE_SESSION_STOPPING_V3;
+		if (session->result == ECHELON_ENGINE_FATAL_ERROR) {
+			session->errorCode = ECHELON_ENGINE_SESSION_ERROR_LEGACY_RUN_V3;
+			session->errorMessage = "Replay simulation failed";
+		}
 	}
 	EchelonSessionWriteResult(session, result);
 	return 1;
@@ -276,18 +413,38 @@ static uint32_t EchelonModuleStepSession(EchelonEngineSessionV3 *session,
 		EchelonSessionWriteResult(nullptr, result);
 		return 0;
 	}
-	// The first V3 adapter wraps the existing blocking GameMain loop. Start performs the
-	// legacy frame pump; Step remains an explicit completion observation until the engine
-	// exposes a native per-frame entry point.
-	if (session->state != ECHELON_ENGINE_SESSION_STOPPING_V3 &&
-		session->state != ECHELON_ENGINE_SESSION_QUIESCENT_V3) {
+	if (session->state != ECHELON_ENGINE_SESSION_RUNNING_V3) {
 		session->errorCode = ECHELON_ENGINE_SESSION_ERROR_INVALID_STATE_V3;
-		session->errorMessage = "Legacy engine session has no frame to step before Start completes";
+		session->errorMessage = "Engine session is not running";
 		EchelonSessionWriteResult(session, result);
 		return 0;
 	}
+	if (!TheGameEngine || !TheFramePacer) {
+		session->state = ECHELON_ENGINE_SESSION_FAILED_V3;
+		session->errorCode = ECHELON_ENGINE_SESSION_ERROR_INVALID_STATE_V3;
+		session->errorMessage = "Engine session has no active frame loop";
+		EchelonSessionWriteResult(session, result);
+		return 0;
+	}
+	try {
+		TheGameEngine->update();
+		TheFramePacer->update();
+		if (TheGameEngine->getQuitting()) {
+			session->result = s_echelonReturnRequested ? ECHELON_ENGINE_RETURN_TO_LAUNCHER :
+				ECHELON_ENGINE_EXIT_APPLICATION;
+			session->state = ECHELON_ENGINE_SESSION_STOPPING_V3;
+		}
+	} catch (const std::exception &error) {
+		session->state = ECHELON_ENGINE_SESSION_FAILED_V3;
+		session->errorCode = ECHELON_ENGINE_SESSION_ERROR_LEGACY_RUN_V3;
+		session->errorMessage = error.what();
+	} catch (...) {
+		session->state = ECHELON_ENGINE_SESSION_FAILED_V3;
+		session->errorCode = ECHELON_ENGINE_SESSION_ERROR_LEGACY_RUN_V3;
+		session->errorMessage = "Unknown exception while stepping the engine";
+	}
 	EchelonSessionWriteResult(session, result);
-	return 1;
+	return session->state != ECHELON_ENGINE_SESSION_FAILED_V3;
 }
 
 static uint32_t EchelonModuleStopSession(EchelonEngineSessionV3 *session,
@@ -297,13 +454,22 @@ static uint32_t EchelonModuleStopSession(EchelonEngineSessionV3 *session,
 		EchelonSessionWriteResult(nullptr, result);
 		return 0;
 	}
-	if (session->state != ECHELON_ENGINE_SESSION_STOPPING_V3) {
+	if (session->state != ECHELON_ENGINE_SESSION_STOPPING_V3 &&
+		session->state != ECHELON_ENGINE_SESSION_FAILED_V3) {
 		session->errorCode = ECHELON_ENGINE_SESSION_ERROR_INVALID_STATE_V3;
 		session->errorMessage = "Engine session is not waiting for Stop";
 		EchelonSessionWriteResult(session, result);
 		return 0;
 	}
-	session->quiescenceFlags = EchelonModuleQueryQuiescence(nullptr);
+	if (session->nativeLifecycle && !session->nativeFinished) {
+		std::string finishError;
+		session->result = EchelonFinishNativeGame(&session->host, session->result == ECHELON_ENGINE_FATAL_ERROR ? 1 : 0,
+			session->quiescenceFlags, finishError);
+		session->nativeFinished = true;
+		if (!finishError.empty() && session->errorMessage.empty()) session->errorMessage = finishError;
+	} else {
+		session->quiescenceFlags = EchelonModuleQueryQuiescence(nullptr);
+	}
 	if ((session->quiescenceFlags & ECHELON_ENGINE_REQUIRED_QUIESCENCE_FLAGS) !=
 		ECHELON_ENGINE_REQUIRED_QUIESCENCE_FLAGS) {
 		session->state = ECHELON_ENGINE_SESSION_FAILED_V3;
@@ -312,7 +478,8 @@ static uint32_t EchelonModuleStopSession(EchelonEngineSessionV3 *session,
 		EchelonSessionWriteResult(session, result);
 		return 0;
 	}
-	session->state = ECHELON_ENGINE_SESSION_QUIESCENT_V3;
+	session->state = session->result == ECHELON_ENGINE_FATAL_ERROR ? ECHELON_ENGINE_SESSION_FAILED_V3 :
+		ECHELON_ENGINE_SESSION_QUIESCENT_V3;
 	EchelonSessionWriteResult(session, result);
 	return 1;
 }

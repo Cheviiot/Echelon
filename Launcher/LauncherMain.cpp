@@ -18,6 +18,7 @@
 #include "LauncherSettings.h"
 #include "LauncherLocks.h"
 #include "LauncherWorkspace.h"
+#include "PresentationService.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_process.h>
@@ -1500,6 +1501,18 @@ void EnginePhase(void *, EchelonEnginePhaseV2 phase, const char *message)
 	fflush(stderr);
 }
 
+// Echelon @feature Codex 07/09/2026 Emit machine-readable operation context beside user-facing errors.
+void LogOperationDiagnostic(const char *operation, const EchelonLauncher::OperationDiagnostic &diagnostic)
+{
+	fprintf(stderr, "[ECHELON-DIAGNOSTIC] operation=%s stage=%s code=%u profile=%s workspace=%s affected=%s retryable=%u\n",
+		operation ? operation : "unknown", EchelonLauncher::OperationStageName(diagnostic.stage),
+		static_cast<unsigned int>(diagnostic.code), diagnostic.profileId.empty() ? "-" : diagnostic.profileId.c_str(),
+		diagnostic.workspace.empty() ? "-" : diagnostic.workspace.string().c_str(),
+		diagnostic.affectedPath.empty() ? "-" : diagnostic.affectedPath.string().c_str(),
+		diagnostic.retryable ? 1u : 0u);
+	fflush(stderr);
+}
+
 void SetEnvironment(const char *name, const std::string &value)
 {
 #if defined(_WIN32)
@@ -1655,29 +1668,9 @@ bool RestoreSharedWindowState(SDL_Window *window, const SharedWindowState &state
 	return true;
 }
 
-// Echelon @refactor Codex 06/09/2026 Centralize window and presentation handoff behind one host service.
-struct PresentationService
-{
-	SDL_Window *window = nullptr;
-
-	bool apply(bool windowed, uint32_t renderWidth, uint32_t renderHeight)
-	{
-		if (!window || renderWidth == 0 || renderHeight == 0) return false;
-		fprintf(stderr, "[WINDOW-MODE] owner=engine requested=%s render=%ux%u\n",
-			windowed ? "windowed" : "fullscreen", renderWidth, renderHeight);
-		fflush(stderr);
-		if (!windowed) return ApplyFullscreenPresentation(window);
-		float density = SDL_GetWindowPixelDensity(window);
-		if (!(density > 0.0f)) density = 1.0f;
-		const int logicalWidth = std::max(1, static_cast<int>(std::lround(renderWidth / density)));
-		const int logicalHeight = std::max(1, static_cast<int>(std::lround(renderHeight / density)));
-		return ApplyWindowedPresentation(window, logicalWidth, logicalHeight, true);
-	}
-};
-
 uint32_t EngineWindowModeCallback(void *userData, uint32_t windowed, uint32_t renderWidth, uint32_t renderHeight)
 {
-	auto *coordinator = static_cast<PresentationService *>(userData);
+	auto *coordinator = static_cast<EchelonLauncher::PresentationService *>(userData);
 	return coordinator && coordinator->apply(windowed != 0, renderWidth, renderHeight) ? 1u : 0u;
 }
 
@@ -1841,23 +1834,42 @@ EchelonEngineResultV2 RunProfile(LauncherProfile &profile, SDL_Window *window, c
 	const EchelonLauncher::LauncherSettings &launcherSettings,
 	bool headless, uint32_t internalTestReturnAfterUpdates,
 	std::unordered_map<std::string, LoadedModule> &modules,
-	uint32_t &quiescenceFlags, std::string &errorMessage, PresentationService *windowCoordinator = nullptr,
+	uint32_t &quiescenceFlags, std::string &errorMessage, EchelonLauncher::PresentationService *windowCoordinator = nullptr,
 	const EchelonLauncher::ModificationStack *contentStack = nullptr,
-	const EchelonLauncher::WorkspaceRecord *workspaceRecord = nullptr)
+	const EchelonLauncher::WorkspaceRecord *workspaceRecord = nullptr,
+	EchelonLauncher::OperationDiagnostic *diagnostic = nullptr)
 {
 	quiescenceFlags = 0;
+	if (diagnostic) {
+		diagnostic->profileId = profile.id;
+		diagnostic->workspace = workspaceRecord ? workspaceRecord->path : fs::path{};
+		diagnostic->stage = EchelonLauncher::OperationStage::Prepare;
+		diagnostic->code = EchelonLauncher::OperationErrorCode::None;
+	}
 	std::vector<std::string> arguments;
 	arguments.emplace_back(EchelonBrand::kProductSlug);
 	arguments.insert(arguments.end(), gameArguments.begin(), gameArguments.end());
 	if (!ValidateManagedContent(profile, arguments, contentStack, workspaceRecord, errorMessage)) {
+		if (diagnostic) {
+			diagnostic->stage = EchelonLauncher::OperationStage::Verify;
+			diagnostic->code = EchelonLauncher::OperationErrorCode::IntegrityFailure;
+		}
 		return ECHELON_ENGINE_FATAL_ERROR;
 	}
 	LoadedModule *module = LoadModule(profile.engine, modules, errorMessage);
-	if (!module) return ECHELON_ENGINE_FATAL_ERROR;
+	if (!module) {
+		if (diagnostic) {
+			diagnostic->stage = EchelonLauncher::OperationStage::Start;
+			diagnostic->code = EchelonLauncher::OperationErrorCode::EngineFailure;
+			diagnostic->retryable = true;
+		}
+		return ECHELON_ENGINE_FATAL_ERROR;
+	}
 	const EchelonLauncher::ProfileLaunchSettings &profileSettings =
 		EchelonLauncher::SettingsForProfile(launcherSettings, profile.id);
 	if (!headless) {
 		if (!EchelonLauncher::AppendProfileArguments(profileSettings, arguments, errorMessage)) {
+			if (diagnostic) diagnostic->code = EchelonLauncher::OperationErrorCode::InvalidInput;
 			return ECHELON_ENGINE_FATAL_ERROR;
 		}
 	}
@@ -1869,6 +1881,10 @@ EchelonEngineResultV2 RunProfile(LauncherProfile &profile, SDL_Window *window, c
 		const EchelonLauncher::GameOptions options =
 			EchelonLauncher::LoadGameOptions(profile.userDataRoot / "Options.ini", optionsError);
 		if (!optionsError.empty()) {
+			if (diagnostic) {
+				diagnostic->stage = EchelonLauncher::OperationStage::Prepare;
+				diagnostic->code = EchelonLauncher::OperationErrorCode::InvalidInput;
+			}
 			errorMessage = optionsError;
 			return ECHELON_ENGINE_FATAL_ERROR;
 		}
@@ -1889,6 +1905,11 @@ EchelonEngineResultV2 RunProfile(LauncherProfile &profile, SDL_Window *window, c
 			}
 		}
 		if (!windowCoordinator->apply(engineWindowed, static_cast<uint32_t>(renderWidth), static_cast<uint32_t>(renderHeight))) {
+			if (diagnostic) {
+				diagnostic->stage = EchelonLauncher::OperationStage::Prepare;
+				diagnostic->code = EchelonLauncher::OperationErrorCode::EngineFailure;
+				diagnostic->retryable = true;
+			}
 			errorMessage = std::string("Cannot apply engine display mode: ") + SDL_GetError();
 			return ECHELON_ENGINE_FATAL_ERROR;
 		}
@@ -1915,12 +1936,22 @@ EchelonEngineResultV2 RunProfile(LauncherProfile &profile, SDL_Window *window, c
 	SetEnvironment("ECHELON_UI_LANGUAGE",
 		profile.hasRussianLocalization && useRussianLocalization ? "ru" : "en");
 
-	ScopedCurrentDirectory sessionDirectory;
-	std::error_code directoryError;
-	fs::current_path(profile.assetRoot, directoryError);
-	if (directoryError) {
-		errorMessage = "Cannot enter game data directory: " + directoryError.message();
-		return ECHELON_ENGINE_FATAL_ERROR;
+	// Echelon @refactor Codex 07/09/2026 ABI V3 receives explicit asset roots and no longer depends on a process-wide cwd.
+	// ABI V2 keeps the cwd bridge because the legacy GameMain path still resolves a few relative files directly.
+	std::optional<ScopedCurrentDirectory> sessionDirectory;
+	if (!module->apiV3) {
+		sessionDirectory.emplace();
+		std::error_code directoryError;
+		fs::current_path(profile.assetRoot, directoryError);
+		if (directoryError) {
+			if (diagnostic) {
+				diagnostic->stage = EchelonLauncher::OperationStage::Prepare;
+				diagnostic->code = EchelonLauncher::OperationErrorCode::FilesystemFailure;
+				diagnostic->retryable = true;
+			}
+			errorMessage = "Cannot enter game data directory: " + directoryError.message();
+			return ECHELON_ENGINE_FATAL_ERROR;
+		}
 	}
 
 	EchelonEngineHostV2 host{};
@@ -1976,6 +2007,11 @@ EchelonEngineResultV2 RunProfile(LauncherProfile &profile, SDL_Window *window, c
 		EchelonEngineSessionV3 *engineSession = module->apiV3->create_session(
 			reinterpret_cast<const EchelonEngineHostV3 *>(&host));
 		if (!engineSession) {
+			if (diagnostic) {
+				diagnostic->stage = EchelonLauncher::OperationStage::Start;
+				diagnostic->code = EchelonLauncher::OperationErrorCode::EngineFailure;
+				diagnostic->retryable = true;
+			}
 			errorMessage = "Engine module could not create an ABI V3 session";
 			return ECHELON_ENGINE_FATAL_ERROR;
 		}
@@ -1987,21 +2023,37 @@ EchelonEngineResultV2 RunProfile(LauncherProfile &profile, SDL_Window *window, c
 			}
 		};
 		if (!module->apiV3->prepare_session(engineSession, &sessionResult)) {
+			if (diagnostic) {
+				diagnostic->stage = EchelonLauncher::OperationStage::Prepare;
+				diagnostic->code = static_cast<EchelonLauncher::OperationErrorCode>(sessionResult.error_code + 100);
+			}
 			copySessionError();
 			module->apiV3->destroy_session(engineSession);
 			return ECHELON_ENGINE_FATAL_ERROR;
 		}
 		if (!module->apiV3->start_session(engineSession, &sessionResult)) {
+			if (diagnostic) {
+				diagnostic->stage = EchelonLauncher::OperationStage::Start;
+				diagnostic->code = static_cast<EchelonLauncher::OperationErrorCode>(sessionResult.error_code + 100);
+			}
 			copySessionError();
 			module->apiV3->destroy_session(engineSession);
 			return ECHELON_ENGINE_FATAL_ERROR;
 		}
-		if (!module->apiV3->step_session(engineSession, &sessionResult)) {
-			copySessionError();
-			module->apiV3->destroy_session(engineSession);
-			return ECHELON_ENGINE_FATAL_ERROR;
+		// Echelon @feature Codex 07/09/2026 Pump the native V3 session until the engine requests Stop.
+		bool stepFailed = false;
+		while (sessionResult.state == ECHELON_ENGINE_SESSION_RUNNING_V3) {
+			if (!module->apiV3->step_session(engineSession, &sessionResult)) {
+				copySessionError();
+				stepFailed = true;
+				break;
+			}
 		}
 		if (!module->apiV3->stop_session(engineSession, &sessionResult)) {
+			if (diagnostic) {
+				diagnostic->stage = EchelonLauncher::OperationStage::Stop;
+				diagnostic->code = static_cast<EchelonLauncher::OperationErrorCode>(sessionResult.error_code + 100);
+			}
 			copySessionError();
 			module->apiV3->destroy_session(engineSession);
 			return ECHELON_ENGINE_FATAL_ERROR;
@@ -2010,12 +2062,26 @@ EchelonEngineResultV2 RunProfile(LauncherProfile &profile, SDL_Window *window, c
 		copySessionError();
 		result = sessionResult.result;
 		quiescenceFlags = sessionResult.quiescence_flags;
+		if (diagnostic) {
+			diagnostic->stage = result == ECHELON_ENGINE_FATAL_ERROR ? EchelonLauncher::OperationStage::Stop :
+				EchelonLauncher::OperationStage::Quiescent;
+			diagnostic->code = result == ECHELON_ENGINE_FATAL_ERROR ? EchelonLauncher::OperationErrorCode::EngineFailure :
+				EchelonLauncher::OperationErrorCode::None;
+			diagnostic->retryable = result == ECHELON_ENGINE_FATAL_ERROR;
+		}
 		module->apiV3->destroy_session(engineSession);
+		if (stepFailed) return ECHELON_ENGINE_FATAL_ERROR;
 	} else {
 		result = module->api->run(&host);
 		EchelonEngineQuiescenceReportV2 report{};
 		report.struct_size = sizeof(report);
 		quiescenceFlags = module->api->query_quiescence(&report);
+		if (diagnostic) {
+			diagnostic->stage = result == ECHELON_ENGINE_FATAL_ERROR ? EchelonLauncher::OperationStage::Stop :
+			EchelonLauncher::OperationStage::Quiescent;
+			diagnostic->code = result == ECHELON_ENGINE_FATAL_ERROR ? EchelonLauncher::OperationErrorCode::EngineFailure :
+			EchelonLauncher::OperationErrorCode::None;
+		}
 	}
 	fprintf(stderr, "INFO: Echelon engine quiescence flags: 0x%08x\n", quiescenceFlags);
 	fflush(stderr);
@@ -2302,6 +2368,7 @@ int main(int argc, char **argv)
 		const EchelonLauncher::WorkspacePreparationResult workspace =
 			EchelonLauncher::PrepareContentWorkspace(paths.mods, profile->id,
 				commandLineStack ? &*commandLineStack : nullptr);
+		LogOperationDiagnostic("workspace", workspace.diagnostic);
 		if (!workspace.success) {
 			fprintf(stderr, "ERROR: Cannot prepare workspace: %s\n", workspace.message.c_str());
 			return 2;
@@ -2315,12 +2382,22 @@ int main(int argc, char **argv)
 			[&]() {
 				EchelonLauncher::EngineSessionResult sessionResult;
 				sessionResult.quiescenceFlags = 0;
+				sessionResult.diagnostic.profileId = profile->id;
+				sessionResult.diagnostic.workspace = workspace.record.path;
 				sessionResult.result = RunProfile(*profile, nullptr, parsed.engineArguments, launcherSettings, true,
 					parsed.internalTestReturnAfterUpdates, modules, sessionResult.quiescenceFlags, sessionResult.errorMessage,
-					nullptr, commandLineStack ? &*commandLineStack : nullptr, &workspace.record);
+					nullptr, commandLineStack ? &*commandLineStack : nullptr, &workspace.record,
+					&sessionResult.diagnostic);
 				return sessionResult;
 			});
 		if (!session.Prepare(errorMessage)) {
+			EchelonLauncher::OperationDiagnostic diagnostic;
+			diagnostic.profileId = profile->id;
+			diagnostic.workspace = workspace.record.path;
+			diagnostic.stage = EchelonLauncher::OperationStage::Prepare;
+			diagnostic.code = EchelonLauncher::OperationErrorCode::EngineFailure;
+			diagnostic.retryable = true;
+			LogOperationDiagnostic("headless-prepare", diagnostic);
 			fprintf(stderr, "ERROR: %s\n", errorMessage.c_str());
 			return 2;
 		}
@@ -2328,6 +2405,7 @@ int main(int argc, char **argv)
 		const EchelonEngineResultV2 result = sessionResult.result;
 		for (auto &[id, module] : modules) module.api->shutdown();
 		if (!sessionResult.errorMessage.empty()) fprintf(stderr, "ERROR: %s\n", sessionResult.errorMessage.c_str());
+		LogOperationDiagnostic("headless-session", sessionResult.diagnostic);
 		ExitWithoutGlobalDestructors(result == ECHELON_ENGINE_FATAL_ERROR ? 1 : 0);
 	}
 
@@ -3363,13 +3441,22 @@ int main(int argc, char **argv)
 		}
 		const EchelonLauncher::WorkspacePreparationResult workspace =
 			EchelonLauncher::PrepareContentWorkspace(paths.mods, profile.id, contentStack);
+		LogOperationDiagnostic("workspace", workspace.diagnostic);
 		if (!workspace.success) {
 			statusMessage = workspace.message.empty() ?
 				Localized(russian, "Cannot prepare content workspace", "Не удалось подготовить рабочее пространство") : workspace.message;
 			statusError = true;
 			return;
 		}
-		PresentationService windowCoordinator{window};
+		EchelonLauncher::PresentationService windowCoordinator{window,
+			[window](bool windowed, uint32_t renderWidth, uint32_t renderHeight) {
+				if (!windowed) return ApplyFullscreenPresentation(window);
+				float density = SDL_GetWindowPixelDensity(window);
+				if (!(density > 0.0f)) density = 1.0f;
+				const int logicalWidth = std::max(1, static_cast<int>(std::lround(renderWidth / density)));
+				const int logicalHeight = std::max(1, static_cast<int>(std::lround(renderHeight / density)));
+				return ApplyWindowedPresentation(window, logicalWidth, logicalHeight, true);
+			}};
 		EchelonLauncher::LegacyBlockingEngineSession session(
 			[&](std::string &prepareError) {
 				return PreflightProfile(profile, parsed.engineArguments, launcherSettings, false, modules,
@@ -3378,13 +3465,26 @@ int main(int argc, char **argv)
 			[&]() {
 				EchelonLauncher::EngineSessionResult sessionResult;
 				sessionResult.quiescenceFlags = 0;
+				sessionResult.diagnostic.profileId = profile.id;
+				sessionResult.diagnostic.workspace = workspace.record.path;
 				sessionResult.result = RunProfile(profile, window, parsed.engineArguments, launcherSettings, false,
 					parsed.internalTestReturnAfterUpdates, modules, sessionResult.quiescenceFlags,
-					sessionResult.errorMessage, &windowCoordinator, contentStack, &workspace.record);
+					sessionResult.errorMessage, &windowCoordinator, contentStack, &workspace.record,
+					&sessionResult.diagnostic);
 				return sessionResult;
 			});
 		std::string engineError;
 		if (!session.Prepare(engineError)) {
+			EchelonLauncher::OperationDiagnostic diagnostic;
+			diagnostic.profileId = profile.id;
+			diagnostic.workspace = workspace.record.path;
+			diagnostic.stage = EchelonLauncher::OperationStage::Prepare;
+			diagnostic.code = EchelonLauncher::OperationErrorCode::EngineFailure;
+			diagnostic.retryable = true;
+			LogOperationDiagnostic("engine-prepare", diagnostic);
+			fprintf(stderr, "ERROR: Engine session prepare failed for profile=%s: %s\n",
+				profile.id.c_str(), engineError.c_str());
+			fflush(stderr);
 			statusMessage = engineError.empty() ?
 				Localized(russian, "The engine session could not be prepared", "Не удалось подготовить сессию движка") : engineError;
 			statusError = true;
@@ -3411,6 +3511,7 @@ int main(int argc, char **argv)
 		const EchelonEngineResultV2 result = sessionResult.result;
 		const uint32_t quiescenceFlags = sessionResult.quiescenceFlags;
 		engineError = sessionResult.errorMessage;
+		LogOperationDiagnostic("engine-session", sessionResult.diagnostic);
 		fprintf(stderr, "INFO: Echelon engine session result: %u\n", static_cast<unsigned int>(result));
 		fflush(stderr);
 		if (result == ECHELON_ENGINE_EXIT_APPLICATION) {
@@ -3529,6 +3630,7 @@ int main(int argc, char **argv)
 		if (modificationOperationRunning &&
 			modificationOperation.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
 			const EchelonLauncher::ModificationOperationResult result = modificationOperation.get();
+			LogOperationDiagnostic("content-operation", result.diagnostic);
 			modificationOperationRunning = false;
 			modificationOperationProgress.reset();
 			if (result.success) {

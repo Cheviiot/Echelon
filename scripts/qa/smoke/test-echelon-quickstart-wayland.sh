@@ -42,7 +42,7 @@ cp "${source_data_root}/Profiles/generals.ini" "${source_data_root}/Profiles/zer
 	"${qa_home}/.Echelon/Profiles/"
 printf '%s\n' \
 	'[Launcher]' \
-	'SchemaVersion=1' \
+	'SchemaVersion=3' \
 	'WindowMode=windowed' \
 	'WindowWidth=1100' \
 	'WindowHeight=680' \
@@ -56,7 +56,7 @@ printf '%s\n' \
 	'Windowed=yes' \
 	'QuickStart=yes' \
 	'NoShellMap=no' \
-	>"${qa_home}/.Echelon/Launcher/Settings.ini"
+	>"${qa_home}/.Echelon/Launcher/Settings.v3.ini"
 
 for profile in generals zerohour; do
 	command_file="${qa_root}/${profile}.gdb"

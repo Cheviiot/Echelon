@@ -28,7 +28,7 @@ The main retained integration points are the two SDL entry files, game lifecycle
 
 ## Product identity and local content
 
-The executable is `Echelon`, target `echelon_launcher`, app ID `io.github.cheviiot.Echelon`, private ABI entries `Echelon_GetEngineModuleV2` and additive `Echelon_GetEngineModuleV3`, and data root `$HOME/.Echelon`. The V2 ABI layout remains unchanged; V3 currently adapts the blocking legacy loop to an explicit session lifecycle. Public paths and environment options use `ECHELON_*`; generated C++/JSON identity comes from `cmake/brand.cmake`.
+The executable is `Echelon`, target `echelon_launcher`, app ID `io.github.cheviiot.Echelon`, private ABI entries `Echelon_GetEngineModuleV2` and additive `Echelon_GetEngineModuleV3`, and data root `$HOME/.Echelon`. The V2 ABI layout remains unchanged; V3 now owns a native `Create → Prepare → Start → Step → Stop → Quiescent → Destroy` session while V2 remains the blocking compatibility path. Public paths and environment options use `ECHELON_*`; generated C++/JSON identity comes from `cmake/brand.cmake`.
 
 This is a clean installation. The application does not discover or migrate old Arsenal/GeneralsX roots. Existing directories were used only as explicitly selected, read-only QA inputs in temporary homes.
 

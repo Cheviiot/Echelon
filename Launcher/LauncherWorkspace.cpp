@@ -297,13 +297,17 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 	const std::string &profileId, const ModificationStack *stack)
 {
 	WorkspacePreparationResult result;
+	result.diagnostic.profileId = profileId;
+	result.diagnostic.affectedPath = modsRoot;
 	const std::string engine = stack ? stack->engine : profileId;
 	const std::string fingerprint = stack ? (stack->fingerprint.empty() ? "vanilla" : stack->fingerprint) : "vanilla";
 	if (profileId.empty() || (engine != "generals" && engine != "zerohour")) {
+		result.diagnostic.code = OperationErrorCode::InvalidInput;
 		result.message = "Invalid workspace profile";
 		return result;
 	}
 	if (stack && stack->engine != profileId) {
+		result.diagnostic.code = OperationErrorCode::Conflict;
 		result.message = "Workspace content stack belongs to another profile";
 		return result;
 	}
@@ -312,6 +316,9 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 	ScopedDirectoryLock workspaceLock = ScopedDirectoryLock::TryAcquire(
 		MakeLockPath(modsRoot, "workspace", profileId), lockError);
 	if (!workspaceLock.acquired()) {
+		result.diagnostic.stage = OperationStage::Lock;
+		result.diagnostic.code = OperationErrorCode::LockBusy;
+		result.diagnostic.retryable = true;
 		result.message = lockError.empty() ? "Another workspace operation is active" : lockError;
 		return result;
 	}
@@ -320,6 +327,9 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 	ScopedDirectoryLock contentOperationLock = ScopedDirectoryLock::TryAcquire(
 		MakeLockPath(modsRoot, "content", "operation"), lockError);
 	if (!contentOperationLock.acquired()) {
+		result.diagnostic.stage = OperationStage::Lock;
+		result.diagnostic.code = OperationErrorCode::LockBusy;
+		result.diagnostic.retryable = true;
 		result.message = lockError.empty() ? "Another content operation is active" : lockError;
 		return result;
 	}
@@ -327,6 +337,7 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 	std::vector<const InstalledModification *> verifiedLayers;
 	if (stack) {
 		if (stack->layers.size() > ECHELON_MAX_CONTENT_LAYERS) {
+			result.diagnostic.code = OperationErrorCode::InvalidInput;
 			result.message = "Workspace content stack has too many layers";
 			return result;
 		}
@@ -339,11 +350,16 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 	if (stack) {
 		for (const InstalledModification *layer : stack->layers) {
 			if (!layer || layer->engine != engine || layer->launchPath.empty()) {
+				result.diagnostic.stage = OperationStage::Resolve;
+				result.diagnostic.code = OperationErrorCode::InvalidInput;
 				result.message = "Workspace content stack contains an invalid layer";
 				return result;
 			}
 			std::string verificationError;
 			if (!VerifyInstalledModification(*layer, verificationError)) {
+				result.diagnostic.stage = OperationStage::Verify;
+				result.diagnostic.code = OperationErrorCode::IntegrityFailure;
+				result.diagnostic.affectedPath = layer->manifestPath;
 				result.message = "Cannot verify workspace layer " + layer->id + ": " + verificationError;
 				return result;
 			}
@@ -352,16 +368,22 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 	}
 
 	const fs::path target = WorkspaceTarget(modsRoot, profileId, engine, fingerprint);
+	result.diagnostic.workspace = target;
 	std::error_code targetError;
 	const bool targetIsSymlink = fs::is_symlink(target, targetError);
 	if (!targetError && !targetIsSymlink && ReadRecord(target, profileId, engine, fingerprint, record)) {
 		std::string verificationError;
 		if (!WorkspaceRecordMatchesLayers(record, verifiedLayers) ||
 			!VerifyWorkspaceCopies(record, engine, verificationError)) {
+			result.diagnostic.stage = OperationStage::Verify;
+			result.diagnostic.code = OperationErrorCode::IntegrityFailure;
+			result.diagnostic.affectedPath = target;
+			result.diagnostic.retryable = true;
 			result.message = "Published workspace content is damaged and will be rebuilt";
 		} else {
 			result.success = true;
 			result.reused = true;
+			result.diagnostic.stage = OperationStage::Resolve;
 			result.record = std::move(record);
 			result.message = "Workspace reused";
 			return result;
@@ -372,6 +394,9 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 	targetError.clear();
 	const bool targetExists = fs::exists(target, targetError);
 	if (targetError) {
+		result.diagnostic.stage = OperationStage::Verify;
+		result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+		result.diagnostic.retryable = true;
 		result.message = "Cannot inspect existing workspace: " + targetError.message();
 		return result;
 	}
@@ -381,12 +406,18 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 		fs::create_directories(quarantine.parent_path(), error);
 		if (!error) fs::rename(target, quarantine, error);
 		if (error) {
+			result.diagnostic.stage = OperationStage::Recover;
+			result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+			result.diagnostic.retryable = true;
 			result.message = "Cannot quarantine invalid workspace: " + error.message();
 			return result;
 		}
 	}
 	fs::create_directories(target.parent_path(), error);
 	if (error) {
+		result.diagnostic.stage = OperationStage::Staging;
+		result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+		result.diagnostic.retryable = true;
 		result.message = "Cannot create workspace directory: " + error.message();
 		return result;
 	}
@@ -395,6 +426,10 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 		("workspace-" + SafeComponent(profileId) + "-" + SafeComponent(fingerprint) + "-" + std::to_string(generation));
 	fs::create_directories(staging, error);
 	if (error) {
+		result.diagnostic.stage = OperationStage::Staging;
+		result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+		result.diagnostic.retryable = true;
+		result.diagnostic.affectedPath = staging;
 		result.message = "Cannot create workspace staging directory: " + error.message();
 		return result;
 	}
@@ -406,6 +441,10 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 		const fs::path source = verifiedLayers[index]->launchPath;
 		const fs::path destination = staging / "layers" / std::to_string(index);
 		if (!MaterializeLayer(source, destination, result.message)) {
+			result.diagnostic.stage = OperationStage::Staging;
+			result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+			result.diagnostic.affectedPath = source;
+			result.diagnostic.retryable = true;
 			QuarantineWorkspaceStaging(modsRoot, staging, profileId);
 			return result;
 		}
@@ -413,16 +452,26 @@ WorkspacePreparationResult PrepareContentWorkspace(const fs::path &modsRoot,
 		record.layerFingerprints.push_back(verifiedLayers[index]->contentFingerprint);
 	}
 	if (!WriteRecord(staging, record, result.message)) {
+		result.diagnostic.stage = OperationStage::Staging;
+		result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+		result.diagnostic.affectedPath = staging / "workspace.ini";
+		result.diagnostic.retryable = true;
 		QuarantineWorkspaceStaging(modsRoot, staging, profileId);
 		return result;
 	}
 	fs::rename(staging, target, error);
 	if (error) {
+		result.diagnostic.stage = OperationStage::Publish;
+		result.diagnostic.code = OperationErrorCode::FilesystemFailure;
+		result.diagnostic.affectedPath = target;
+		result.diagnostic.retryable = true;
 		QuarantineWorkspaceStaging(modsRoot, staging, profileId);
 		result.message = "Cannot publish workspace atomically: " + error.message();
 		return result;
 	}
 	result.success = true;
+	result.diagnostic.stage = OperationStage::Publish;
+	result.diagnostic.affectedPath = target;
 	result.record = std::move(record);
 	result.message = "Workspace prepared";
 	return result;

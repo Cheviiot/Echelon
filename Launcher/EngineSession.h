@@ -11,6 +11,7 @@
 #pragma once
 
 #include "LauncherIntegration/EngineModuleAPI.h"
+#include "LauncherDiagnostics.h"
 
 #include <functional>
 #include <string>
@@ -33,6 +34,7 @@ struct EngineSessionResult
 	EchelonEngineResultV2 result = ECHELON_ENGINE_FATAL_ERROR;
 	uint32_t quiescenceFlags = 0;
 	std::string errorMessage;
+	OperationDiagnostic diagnostic;
 };
 
 // Echelon @refactor Codex 06/09/2026 Give the legacy blocking ABI an explicit host-owned session lifecycle.

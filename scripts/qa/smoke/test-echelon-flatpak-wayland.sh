@@ -50,7 +50,7 @@ cp "${source_data_root}/Profiles/generals.ini" "${source_data_root}/Profiles/zer
 	"${qa_home}/.Echelon/Profiles/"
 printf '%s\n' \
 	'[Launcher]' \
-	'SchemaVersion=1' \
+	'SchemaVersion=3' \
 	"WindowMode=${window_mode}" \
 	'WindowWidth=1100' \
 	'WindowHeight=680' \
@@ -64,7 +64,7 @@ printf '%s\n' \
 	'Windowed=no' \
 	"QuickStart=${quick_start}" \
 	"NoShellMap=${no_shell_map}" \
-	>"${qa_home}/.Echelon/Launcher/Settings.ini"
+	>"${qa_home}/.Echelon/Launcher/Settings.v3.ini"
 printf '%s\n' 'Resolution = 800 600' >"${qa_home}/.Echelon/UserData/Generals/Options.ini"
 printf '%s\n' 'Resolution = 1024 768' >"${qa_home}/.Echelon/UserData/GeneralsZH/Options.ini"
 

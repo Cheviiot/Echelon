@@ -74,7 +74,7 @@ Content remains read-only during gameplay. ABI V2 passes the verified layer stac
 
 The generic HTTPS, resume, S3, and legacy catalog code is retained for isolated fixtures in `echelon_settings_tests`. It is not linked into the launcher. `ECHELON_REPOSITORY_URL` is an explicit test-library input and has no effect on the product UI.
 
-Launcher preferences are stored in `Launcher/Settings.ini`, including the launcher display mode and per-engine localization selection. Engine settings remain in their native locations:
+Launcher preferences are stored in `Launcher/Settings.v3.ini`, including the launcher display mode and per-engine localization selection. The schema version is mandatory; unsupported older files are ignored and replaced only after a successful atomic save. Engine settings remain in their native locations:
 
 ```text
 UserData/Generals/Options.ini
@@ -136,7 +136,9 @@ Echelon_GetEngineModuleV2
 Echelon_GetEngineModuleV3
 ```
 
-The ABI includes the shared SDL window, game arguments, game-data and user-data paths, selected profile, and an ordered array of `EchelonContentLayerV1` records. Each record carries its type, source-qualified ID, version, canonical read-only root, priority, and content fingerprint. Loose files resolve from the highest layer first; BIG/GIB files throughout each layer mount in ascending layer priority with verified overwrite precedence. The engine clears the overlay before reporting the content-layer quiescence bit and returning `ReturnToLauncher`, `ExitApplication`, or `FatalError`.
+The ABI includes the shared SDL window, game arguments, game-data and user-data paths, selected profile, and an ordered array of `EchelonContentLayerV1` records. Each record carries its type, source-qualified ID, version, canonical read-only root, priority, and content fingerprint. Loose files resolve from the highest layer first; BIG/GIB files throughout each layer mount in ascending layer priority with verified overwrite precedence. V3 owns an explicit `Create → Prepare → Start → Step → Stop → Quiescent → Destroy` lifecycle and V2 remains the blocking compatibility path. The engine clears the overlay before reporting the content-layer quiescence bit and returning `ReturnToLauncher`, `ExitApplication`, or `FatalError`.
+
+The launcher keeps window ownership in `PresentationService`. Engine display requests use a callback that changes window mode and size; raw Vulkan devices and swapchains are never exchanged between the launcher renderer and the engine renderer. Preparation and launch failures are logged as structured diagnostics with a stage, code, profile, workspace, affected path and retryability flag.
 
 ## Return and recovery model
 
