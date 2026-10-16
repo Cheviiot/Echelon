@@ -704,7 +704,7 @@ ArchiveFile * StdBIGFileSystem::openArchiveFile(const Char *filename) {
 			if (static_cast<size_t>(pathIndex) >= sizeof(buffer) || fp->read(buffer + pathIndex, 1) != 1) {
 				fprintf(stderr, "[BIG] Rejected unterminated or oversized entry in %s\n", filename);
 				fflush(stderr);
-				delete fileInfo;
+				// Echelon @bugfix Codex 16/10/2026 Upstream now keeps ArchivedFileInfo on the stack (value semantics); only the heap-allocated ArchiveFile needs deletion.
 				delete archiveFile;
 				fp->close();
 				return nullptr;

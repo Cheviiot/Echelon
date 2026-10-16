@@ -3384,24 +3384,7 @@ void operator delete[](void *p, size_t)
 	TheDynamicMemoryAllocator->freeBytes(p);
 }
 
-#if !defined(_WIN32)
-// GeneralsX @bugfix Codex 11/08/2026 Keep C++14 sized deallocation paired with the game allocator.
-void operator delete(void *p, size_t) noexcept
-{
-	++theLinkTester;
-	preMainInitMemoryManager();
-	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != nullptr, ("must init memory manager before calling sized global operator delete"));
-	TheDynamicMemoryAllocator->freeBytes(p);
-}
-
-void operator delete[](void *p, size_t) noexcept
-{
-	++theLinkTester;
-	preMainInitMemoryManager();
-	DEBUG_ASSERTCRASH(TheDynamicMemoryAllocator != nullptr, ("must init memory manager before calling sized global operator delete[]"));
-	TheDynamicMemoryAllocator->freeBytes(p);
-}
-#endif
+// Echelon @bugfix Codex 16/10/2026 Upstream now ships sized operator delete/delete[] itself; drop our older noexcept duplicates to avoid redefinition.
 #endif // !ECHELON_ENGINE_MODULE_ALLOCATOR
 
 //-----------------------------------------------------------------------------
