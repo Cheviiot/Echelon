@@ -1,155 +1,157 @@
-# Echelon Launcher Rework — Design Spec
+# Переработка лаунчера Echelon — дизайн-спека
 
-Date: 2026-10-16
-Status: approved design (interactive session), pending implementation plan
-Workflow: single product branch — all work lands on `main`; the pristine
-`upstream` mirror stays the only separate branch (owner directive).
+Дата: 2026-10-16
+Статус: дизайн согласован интерактивно, ждёт план реализации
+Процесс: одна продуктовая ветка — вся работа идёт в `main`;
+зеркало `upstream` остаётся единственной отдельной веткой (указание владельца).
 
-## Context and motivation
+## Контекст и мотивация
 
-The current universal launcher is a single-pass monolith: `LauncherMain.cpp`
-(4339 lines) contains the main loop, hand-rolled immediate-mode UI, INI
-parsing, file dialogs, retail data migration, Vulkan ICD filtering, audio
-synthesis, 15 `--internal-test-*` flags, the process supervisor and engine
-session orchestration. Base utilities are duplicated across files
-(`ToLower` x9, `Trim` x7, three diverging `IsInsideRoot` variants, six ad-hoc
-INI parsers). ~2000 lines of networking (Downloads/S3/Repositories,
-hand-rolled AWS SigV4) are dead in the product. Errors flow through two
-channels that disagree; concurrency is `std::async` polled per frame.
+Текущий универсальный лаунчер — монолит из одного прохода генерации:
+`LauncherMain.cpp` (4339 строк) содержит главный цикл, самодельный
+immediate-mode UI, парсинг INI, файловые диалоги, миграцию retail-данных,
+фильтр Vulkan ICD, синтез звуков, 15 флагов `--internal-test-*`,
+процесс-супервизор и оркестрацию сессий движка. Базовые утилиты
+продублированы между файлами (`ToLower` ×9, `Trim` ×7, три разошедшиеся
+реализации `IsInsideRoot`, шесть ad-hoc INI-парсеров). ~2000 строк сетевого
+кода (Downloads/S3/Repositories, рукописная подпись AWS SigV4) мертвы в
+продукте. Ошибки идут по двум каналам, которые расходятся;
+многопоточность — `std::async` с опросом каждый кадр.
 
-The owner directed a full rewrite: keep what works, delete the rest, no
-transitionary coexistence of two implementations in the tree.
+Владелец распорядился о полной переработке: сохранить рабочее, удалить
+остальное, без долгого сосуществования двух реализаций в дереве.
 
-Well-designed parts that must survive: content-pipeline crash-safety
-(staging -> sha256 verify -> atomic publish -> trash -> recovery journals),
-workspace isolation, engine ABI contracts (V2/V3, quiescence), supervisor
-recovery, the `OperationDiagnostic` idea.
+Хорошо спроектированное, что должно выжить: crash-safety контент-конвейера
+(staging → проверка sha256 → атомарная публикация → trash → журналы
+восстановления), изоляция workspace, контракты ABI движка (V2/V3,
+quiescence), супервизор восстановления, идея `OperationDiagnostic`.
 
-## Decisions (approved interactively)
+## Решения (согласованы интерактивно)
 
-| # | Decision | Choice | Rationale |
+| № | Вопрос | Выбор | Обоснование |
 |---|---|---|---|
-| A | UI stack | **Dear ImGui** (pinned via FetchContent, official SDL3 backend) | Rich widgets out of the box (tables, cards, progress); header-only, cheap in Flatpak; best agent-maintainability; SDL_Renderer3 backend fits the existing window handoff. Design-system layer gives the Echelon look. |
-| B | Rewrite strategy | **Direct rewrite on `main`** | Owner directive: one branch, no long transitionary coexistence. New layers land with tests while the old `echelon_launcher` still builds; then the new app shell takes over the `echelon_launcher` target and the old `Launcher/*.cpp` files are deleted in the same final step. Until that step the old binary keeps shipping. |
-| C | Architecture | **Six layers, strict downward deps** | See below. |
-| D | Networking | **Deleted entirely** | Catalog service retired by owner; dead code with a hand-rolled crypto attack surface; recoverable from git history if online distribution ever returns. curl/yaml-cpp leave the launcher link line. Localization generation moves to local types. |
+| A | UI-стек | **Dear ImGui** (pin в FetchContent, официальный SDL3-бэкенд) | Богатые виджеты из коробки (таблицы, карточки, прогресс); header-only, дёшев в Flatpak; лучшая поддерживаемость агентами; бэкенд SDL_Renderer3 вписывается в существующий handoff окна. Дизайн-слой даёт фирменный вид Echelon. |
+| B | Стратегия переписывания | **Напрямую в `main`** | Указание владельца: одна ветка, без долгого сосуществования. Новые слои приходят с тестами, пока старый `echelon_launcher` ещё собирается; затем новая app-оболочка занимает таргет `echelon_launcher` и старые файлы `Launcher/*.cpp` удаляются в том же финальном шаге. До этого шага старый бинарь продолжает поставляться. |
+| C | Архитектура | **Шесть слоёв, строгие зависимости вниз** | См. ниже. |
+| D | Сетевой код | **Удалён полностью** | Каталог-сервис пенсионирован владельцем; мёртвый код с рукописной криптоподписью — поверхность атаки; при необходимости восстановим из git-истории. curl/yaml-cpp уходят из линковки лаунчера. Генерация локализации переезжает на локальные типы. |
 
-## Architecture
+## Архитектура
 
 ```
-App/     main(), CLI contract, screen routing, supervisor wiring, markers
-Ui/      ImGui design system, widgets, screens, localization, resources
-Engine/  module loading, SessionHost (V2+V3), PresentationBridge, Supervisor
-Content/ install/migrate/recover operations on a task queue
-Domain/  settings, profiles, manifests, selection, workspace, paths, locks
-Core/    Result/errors, Logger, strings, INI document, file utils, digests
+App/     main(), CLI-контракт, роутинг экранов, супервизор, маркеры
+Ui/      дизайн-система ImGui, виджеты, экраны, локализация, ресурсы
+Engine/  загрузка модулей, SessionHost (V2+V3), PresentationBridge, Supervisor
+Content/ операции install/migrate/recover на очереди задач
+Domain/  настройки, профили, манифесты, стек выбора, workspace, пути, локи
+Core/    Result/ошибки, Logger, строки, INI-документ, файловые утилиты, дайджесты
 ```
 
-Dependencies point strictly downward: `App -> Ui -> {Domain, Content,
-Engine}`; `Content -> Domain -> Core`; `Ui` and `Engine` do not know each
-other. Only `App` wires everything.
+Зависимости строго вниз: `App → Ui → {Domain, Content, Engine}`,
+`Content → Domain → Core`; `Ui` и `Engine` друг о друге не знают.
+Связывает всё только `App`.
 
-### Core (std + OpenSSL only; no SDL, no network)
+### Core (только std + OpenSSL; без SDL и сети)
 
-- `Result<T>` + `OperationError` — the single error channel
-  (stage/code/retryable; human message derived from the code).
-- `Logger` — facade over `fprintf(stderr)` + `fflush` (release-build
-  requirement), component tags, levels.
-- `StringUtils` — one `ToLower`/`Trim`/`Split`/`Slugify`.
-- `IniDocument` — the single INI parse/serialize engine for the whole
-  launcher.
-- `FileUtils` — one `IsInsideRoot`, atomic write (temp + rename + fsync),
-  SHA-256 file digest, case-insensitive path helpers.
-- `FsLock` — directory locks with owner token (ported from `LauncherLocks`).
+- `Result<T>` + `OperationError` — единственный канал ошибок
+  (stage/code/retryable; человекочитаемое сообщение производно от кода).
+- `Logger` — фасад поверх `fprintf(stderr)` + `fflush` (требование
+  релиз-сборок), теги компонентов, уровни.
+- `StringUtils` — одни `ToLower`/`Trim`/`Split`/`Slugify` на всех.
+- `IniDocument` — единый движок парсинга/сериализации INI для всего лаунчера.
+- `FileUtils` — один `IsInsideRoot`, атомарная запись (temp + rename +
+  fsync), SHA-256 файла, регистронезависимые пути.
+- `FsLock` — локи каталогов с owner-токеном (перенос из `LauncherLocks`).
 
-### Domain (pure logic; no SDL, no threads)
+### Domain (чистая логика; без SDL и потоков)
 
-- `Settings` + transactional publication (`Settings.v3.ini`,
-  `SchemaVersion=3` — on-disk format unchanged).
-- `LaunchProfiles` — exactly `generals`/`zerohour` (`LauncherProfileV1`).
-- `ModCatalog` — manifests, semver comparison, layer fingerprints.
-- `Selection` — mod/patch/addon stack resolution.
-- `Workspace` — layer materialization (hardlink/copy), generations,
-  fingerprint re-verification.
-- `Paths` — the entire `~/.Echelon` layout in one place.
-- `Localizer` — EN/RU string table outside code.
+- `Settings` + транзакционная публикация (`Settings.v3.ini`,
+  `SchemaVersion=3` — формат на диске не меняется).
+- `LaunchProfiles` — ровно `generals`/`zerohour` (`LauncherProfileV1`).
+- `ModCatalog` — манифесты, сравнение semver, fingerprint слоёв.
+- `Selection` — резолвинг стека мод/патч/аддон.
+- `Workspace` — материализация слоёв (hardlink/copy), поколения,
+  повторная проверка fingerprint'ов.
+- `Paths` — вся раскладка `~/.Echelon` в одном месте.
+- `Localizer` — таблица строк EN/RU вне кода.
 
-### Content (operations)
+### Content (операции)
 
-- `TaskQueue` — one worker thread; explicit states
-  `queued/running/cancelling/done/failed`; progress struct; cancellation
-  token. No `std::async` polling in the frame loop; shutdown joins with a
-  timeout.
-- `InstallOp` / `MigrationOp` / `Recovery` — crash-safety semantics ported
-  unchanged: staging -> `files.sha256` -> verify -> atomic rename ->
-  `.trash` -> `operation.ini` journals -> recovery at startup.
-  libarchive + OpenSSL via Core.
+- `TaskQueue` — один рабочий поток; явные состояния
+  `queued/running/cancelling/done/failed`; структура прогресса; токен
+  отмены. Никакого `std::async` с опросом в кадре; завершение — join с
+  таймаутом.
+- `InstallOp` / `MigrationOp` / `Recovery` — семантика crash-safety
+  переносится без изменений: staging → `files.sha256` → проверка →
+  атомарный rename → `.trash` → журналы `operation.ini` → восстановление
+  при старте. libarchive + OpenSSL через Core.
 
-### Engine (hosting)
+### Engine (хостинг)
 
-- Module loading via `SDL_LoadObject`.
-- `SessionHost` — V2 and V3 behind one interface; V3 is frame-pumped; env/cwd
-  mutation only inside the scoped V2 compatibility bridge.
-- `PresentationBridge` — no per-frame logging.
-- `Supervisor` — worker process, 3 recoveries/min limit, restart markers.
-- ABI header stays in `EngineIntegration/` (ownership boundary).
+- Загрузка модулей через `SDL_LoadObject`.
+- `SessionHost` — V2 и V3 за одним интерфейсом; V3 качает кадры; мутация
+  env/cwd — только в scoped V2-мосте совместимости.
+- `PresentationBridge` — без логирования каждого кадра.
+- `Supervisor` — worker-процесс, лимит 3 восстановления/мин, маркеры.
+- ABI-заголовок остаётся в `EngineIntegration/` (граница владения).
 
 ### Ui (ImGui + SDL3)
 
-- `DesignSystem` — fonts, Echelon palette, ImGui style setup.
-- `Widgets` — mod cards, setting rows, lists with stable `##id` discipline.
-- `Screens` — Main / Settings / Mods / Install+Progress / Dialogs; each a
-  class with own state and `handleEvent`/`render`.
-- `Resources` — cover texture cache, sounds.
+- `DesignSystem` — шрифты, палитра Echelon, настройка стиля ImGui.
+- `Widgets` — карточки модов, строки настроек, списки с дисциплиной
+  стабильных `##id`.
+- `Screens` — Main / Settings / Mods / Install+Progress / Dialogs; каждый —
+  класс со своим состоянием и методами `handleEvent`/`render`.
+- `Resources` — кэш текстур обложек, звуки.
 
 ### App
 
-- CLI contract unchanged: `--launcher`, `--profile=`, `--mod/--patch/--addon`,
-  `--no-mods`, `-headless`, `-quickstart`, `-noshellmap`, engine argument
-  pass-through, and all `--internal-test-*` flags used by smoke tests.
-- `Markers` — every stderr marker parsed by QA (`[CONTENT-STACK]`,
+- CLI-контракт без изменений: `--launcher`, `--profile=`, `--mod/--patch/--addon`,
+  `--no-mods`, `-headless`, `-quickstart`, `-noshellmap`, проброс неизвестных
+  аргументов движку и все флаги `--internal-test-*`, используемые
+  smoke-тестами.
+- `Markers` — все stderr-маркеры, которые парсит QA (`[CONTENT-STACK]`,
   `[CONTENT-LAYER]`, `[WINDOW-HANDOFF]`, `[WINDOW-MODE]`, `[WORKER-RESOURCES]`,
-  `[PRESENTATION-BRIDGE]`, quiescence line, supervisor lines) as `constexpr`
-  in one file.
+  `[PRESENTATION-BRIDGE]`, строка quiescence, строки супервизора) — как
+  `constexpr` в одном файле.
 
-## Hard contracts (unchanged by this rework)
+## Жёсткие контракты (переработка их не меняет)
 
-- On-disk data layout under `~/.Echelon` and all file formats.
-- CLI flags and stderr markers (see `Markers` above).
-- Engine ABI V2 + V3, quiescence mask `0x0000007f`, exactly two module
-  exports.
-- Retired mod catalog stays retired: no repository/download/S3 code, no
-  network calls from the mod UI.
-- Product identity, packaging presets, output/install layout.
-- Determinism rules, FP flags, WWMath wrappers untouched.
+- Раскладка данных на диске в `~/.Echelon` и все файловые форматы.
+- CLI-флаги и stderr-маркеры (см. `Markers` выше).
+- ABI движка V2 + V3, маска quiescence `0x0000007f`, ровно два экспорта
+  модулей.
+- Пенсионированный каталог модов не возрождается: никакого кода
+  repository/download/S3, никаких сетевых вызовов из UI модов.
+- Идентичность продукта, пресеты сборки, раскладка вывода и установки.
+- Правила детерминизма, FP-флаги, WWMath-обёртки — не трогаем.
 
-## Testing
+## Тестирование
 
-- Per-layer ctest targets for Core/Domain/Content (headless, no SDL where
-  possible). The ctest name `echelon_local_content` is preserved for
-  smoke-script compatibility.
-- UI/engine parity validated with the existing Wayland smoke suite
-  (screenshots, supervisor recovery, content stack, headless dispatch,
+- Отдельные ctest-таргеты на слой для Core/Domain/Content (headless, без
+  SDL где возможно). Имя `echelon_local_content` сохранено для
+  совместимости со smoke-скриптами.
+- Паритет UI/движка проверяется существующим Wayland smoke-набором
+  (скриншоты, supervisor recovery, content stack, headless dispatch,
   Flatpak).
-- Old `LauncherSettingsTests.cpp` fixtures serve as the behavioral
-  specification for the Domain ports.
+- Фикстуры старого `LauncherSettingsTests.cpp` служат спецификацией
+  поведения при переносе Domain-слоя.
 
-## Explicitly out of scope
+## Явно вне рамок
 
-- The MiniAudio-vs-OpenAL question raised by upstream #358 (the sync is now
-  merged; the conflict must be resolved separately on `main` — macOS CI is
-  red until then).
-- Any change to engine gameplay code, determinism, or the ABI.
-- Online mod distribution (retired); update-checker UI (decide later).
+- Вопрос MiniAudio против OpenAL, поднятый апстримом #358 (синк смержен;
+  конфликт решается отдельно в `main` — macOS CI красный, пока не починим).
+- Любые изменения игрового кода движка, детерминизма или ABI.
+- Онлайн-распространение модов (пенсионировано); UI апдейт-чекера
+  (решим позже).
 
-## Risks
+## Риски
 
-- Smoke tests depend on exact stderr strings and `--internal-test-*` flags;
-  the `Markers` file and unchanged CLI keep that contract stable.
-- No local build environment on the maintainer workstation right now
-  (missing `ubuntu-dev` Distrobox); validation relies on CI until it is
-  restored. Note: macOS CI jobs are failing on `main` after the upstream
-  sync (MiniAudio unification / Core restructure overlap) and must be fixed
-  alongside the rework.
-- ImGui look needs deliberate design-system work to avoid a "debug tool"
-  appearance.
+- Smoke-тесты завязаны на точные строки stderr и флаги `--internal-test-*`;
+  файл `Markers` и неизменный CLI держат этот контракт стабильным.
+- На рабочей станции владельца сейчас нет локального окружения сборки
+  (нет Distrobox `ubuntu-dev`); валидация опирается на CI, пока окружение не
+  восстановлено. Примечание: macOS-сборки в CI красные после синка с
+  апстримом (пересечение унификации MiniAudio с нашим OpenAL и
+  реструктуризации Core) — чинить будем в ходе переработки.
+- Вид ImGui требует осознанной работы дизайн-системы, чтобы не выглядеть
+  «дебаг-тулзой».
