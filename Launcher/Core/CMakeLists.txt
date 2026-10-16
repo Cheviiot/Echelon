@@ -5,6 +5,8 @@ add_library(echelon_core STATIC
     Source/StringUtils.cpp
     Source/Logger.cpp
     Source/IniDocument.cpp
+    Source/FileUtils.cpp
+    Source/FsLock.cpp
 )
 
 target_compile_features(echelon_core PUBLIC cxx_std_17)

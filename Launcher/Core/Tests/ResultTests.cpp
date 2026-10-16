@@ -17,6 +17,8 @@ using namespace echelon::core;
 // points are invoked from this main().
 void RunStringUtilsTests();
 void RunIniDocumentTests();
+void RunFileUtilsTests();
+void RunFsLockTests();
 
 namespace
 {
@@ -133,5 +135,7 @@ int main()
 	TestMessageFormat();
 	RunStringUtilsTests();
 	RunIniDocumentTests();
+	RunFileUtilsTests();
+	RunFsLockTests();
 	return TestKitReport();
 }
