@@ -2,7 +2,7 @@
     "version": 6,
     "cmakeMinimumRequired": {
         "major": 3,
-        "minor": 25,
+        "minor": 28,
         "patch": 0
     },
     "configurePresets": [
@@ -84,7 +84,8 @@
                 "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "$<$<CONFIG:Release,Debug,RelWithDebInfo>:Embedded>",
                 "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL",
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-                "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets"
+                "VCPKG_OVERLAY_PORTS": "${sourceDir}/cmake/ports",
+                "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/triplets"
             }
         },
         {
@@ -195,7 +196,7 @@
         },
         {
             "name": "linux64-deploy",
-            "displayName": "Linux 64-bit DXVK/SDL3/OpenAL Release",
+            "displayName": "Linux 64-bit DXVK/SDL3/MiniAudio Release",
             "inherits": "default-vcpkg",
             "generator": "Ninja",
             "hidden": false,
@@ -205,8 +206,8 @@
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo",
                 "SAGE_USE_DX8": "OFF",
                 "SAGE_USE_SDL3": "ON",
-                "SAGE_USE_OPENAL": "ON",
-                "SAGE_USE_MINIAUDIO": "OFF",
+                "SAGE_USE_OPENAL": "OFF",
+                "SAGE_USE_MINIAUDIO": "ON",
                 "SAGE_USE_GLM": "ON",
                 "SAGE_UPDATE_CHECK": "ON",
                 "RTS_CRASHDUMP_ENABLE": "OFF",
@@ -406,8 +407,8 @@
         {
             "name": "linux64-deploy",
             "configurePreset": "linux64-deploy",
-            "displayName": "Build Linux 64-bit DXVK/SDL3/OpenAL Release",
-            "description": "Build Linux 64-bit with DXVK graphics, SDL3 windowing, and OpenAL audio"
+            "displayName": "Build Linux 64-bit DXVK/SDL3/MiniAudio Release",
+            "description": "Build Linux 64-bit with DXVK graphics, SDL3 windowing, and MiniAudio audio (recommended)"
         },
         {
             "name": "linux64-openal",
@@ -419,7 +420,7 @@
             "name": "linux64-miniaudio",
             "configurePreset": "linux64-miniaudio",
             "displayName": "Build Linux 64-bit DXVK/SDL3/MiniAudio Release",
-            "description": "Build Linux 64-bit with DXVK graphics, SDL3 windowing, and MiniAudio audio (experimental)"
+            "description": "Build Linux 64-bit with DXVK graphics, SDL3 windowing, and MiniAudio audio"
         }
     ],
     "workflowPresets": [

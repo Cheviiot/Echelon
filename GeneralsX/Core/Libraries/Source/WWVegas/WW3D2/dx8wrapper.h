@@ -287,6 +287,10 @@ public:
 	static void Shutdown();
 
 	static void SetCleanupHook(DX8_CleanupHook *pCleanupHook) {m_pCleanupHook = pCleanupHook;};
+	static DX8_CleanupHook *GetCleanupHook() { return m_pCleanupHook; }
+	// GeneralsX @feature fbraz3 09/10/2026 Support multiple cleanup hooks for subsystems like W3DPostProcess
+	static void AddCleanupHook(DX8_CleanupHook *pCleanupHook);
+	static void RemoveCleanupHook(DX8_CleanupHook *pCleanupHook);
 	/*
 	** Some WW3D sub-systems need to be initialized after the device is created and shutdown
 	** before the device is released.
@@ -928,7 +932,7 @@ WWINLINE void DX8Wrapper::Set_DX8_Render_State(D3DRENDERSTATETYPE state, unsigne
 	// Can't monitor state changes because setShader call to GERD may change the states!
 	if (RenderStates[state]==value) return;
 
-#ifdef MESH_RENDER_SNAPSHOT_ENABLED
+#ifdef DEBUG_LOGGING
 	if (WW3D::Is_Snapshot_Activated()) {
 		StringClass value_name(0,true);
 		Get_DX8_Render_State_Value_Name(value_name,state,value);
@@ -957,7 +961,8 @@ WWINLINE void DX8Wrapper::Set_DX8_Texture_Stage_State(unsigned stage, D3DTEXTURE
 
 	// Can't monitor state changes because setShader call to GERD may change the states!
 	if (TextureStageStates[stage][(unsigned int)state]==value) return;
-#ifdef MESH_RENDER_SNAPSHOT_ENABLED
+
+#ifdef DEBUG_LOGGING
 	if (WW3D::Is_Snapshot_Activated()) {
 		StringClass value_name(0,true);
 		Get_DX8_Texture_Stage_State_Value_Name(value_name,state,value);
@@ -1259,10 +1264,8 @@ WWINLINE void DX8Wrapper::Set_Shader(const ShaderClass& shader)
 	}
 	render_state.shader=shader;
 	render_state_changed|=SHADER_CHANGED;
-#ifdef MESH_RENDER_SNAPSHOT_ENABLED
-	StringClass str;
-#endif
-	SNAPSHOT_SAY(("DX8Wrapper::Set_Shader(%s)",shader.Get_Description(str).str()));
+
+	SNAPSHOT_SAY(("DX8Wrapper::Set_Shader(%s)",shader.Get_Description().str()));
 }
 
 // GeneralsX @refactor BenderAI 10/02/2026

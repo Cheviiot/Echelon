@@ -62,6 +62,11 @@ ln -sf libSDL3_image.0.4.0.dylib "${RUNTIME_DIR}/libSDL3_image.dylib" 2>/dev/nul
 echo "  Copying GameSpy library..."
 cp -v "${GAMESPY_LIB}" "${RUNTIME_DIR}/"
 
+echo "  Copying GameNetworkingSockets library..."
+if [[ -f "${BUILD_DIR}/bin/libGameNetworkingSockets.dylib" ]]; then
+    cp -v "${BUILD_DIR}/bin/libGameNetworkingSockets.dylib" "${RUNTIME_DIR}/"
+fi
+
 echo "  Copying DXVK libraries (d3d9 + d3d8)..."
 if [[ ! -f "${DXVK_D3D9_LIB}" || ! -f "${DXVK_D3D8_LIB}" ]]; then
     echo "ERROR: Required DXVK dylibs were not found in expected locations:"
@@ -104,6 +109,31 @@ if [[ -f "${DXVK_CONF_SRC}" ]]; then
     cp -v "${DXVK_CONF_SRC}" "${RUNTIME_DIR}/dxvk.conf"
 else
     echo "WARNING: ${DXVK_CONF_SRC} not found; DXVK will use defaults."
+fi
+
+# GeneralsX @feature fbraz3 08/10/2026 Deploy FXListGeneralsX.ini for dynamic explosion & superweapon lights
+FXLIST_GENERALSX_SRC="${PROJECT_ROOT}/Generals/Data/INI/FXListGeneralsX.ini"
+if [[ -f "${FXLIST_GENERALSX_SRC}" ]]; then
+    mkdir -p "${RUNTIME_DIR}/Data/INI"
+    cp -v "${FXLIST_GENERALSX_SRC}" "${RUNTIME_DIR}/Data/INI/FXListGeneralsX.ini"
+fi
+
+echo "  Deploying Fontconfig config & fonts..."
+mkdir -p "${RUNTIME_DIR}/fonts"
+if [[ -d "${PROJECT_ROOT}/assets/fonts" ]]; then
+    cp -v "${PROJECT_ROOT}/assets/fonts"/*.ttf "${RUNTIME_DIR}/fonts/"
+    cp -v "${PROJECT_ROOT}/assets/fonts/LICENSE.liberation" "${RUNTIME_DIR}/fonts/"
+    cp -v "${PROJECT_ROOT}/assets/fonts/LICENSE.fontawesome" "${RUNTIME_DIR}/fonts/"
+fi
+
+FONTCONFIG_ETC_DIR="${BUILD_DIR}/vcpkg_installed/arm64-osx/etc/fonts"
+if [[ -f "${FONTCONFIG_ETC_DIR}/fonts.conf" ]]; then
+    mkdir -p "${RUNTIME_DIR}/fontconfig"
+    cp -v "${FONTCONFIG_ETC_DIR}/fonts.conf" "${RUNTIME_DIR}/fontconfig/fonts.conf"
+    rm -rf "${RUNTIME_DIR}/fontconfig/conf.d"
+    if [[ -d "${FONTCONFIG_ETC_DIR}/conf.d" ]]; then
+        cp -R "${FONTCONFIG_ETC_DIR}/conf.d" "${RUNTIME_DIR}/fontconfig/conf.d"
+    fi
 fi
 
 echo "  Writing run.sh wrapper..."

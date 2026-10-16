@@ -94,9 +94,10 @@
 #include "formconv.h"
 #include "dx8texman.h"
 #include "WWLib/bound.h"
-#include "WWLib/DbgHelpGuard.h"
+#include "DbgHelpGuard.h"
 
 #include "shdlib.h"
+#include <vector>
 
 const int DEFAULT_RESOLUTION_WIDTH = 640;
 const int DEFAULT_RESOLUTION_HEIGHT = 480;
@@ -515,6 +516,30 @@ Direct3DCreate8Type	Direct3DCreate8Ptr = nullptr;
 HINSTANCE D3D8Lib = nullptr;
 
 DX8_CleanupHook	 *DX8Wrapper::m_pCleanupHook=nullptr;
+static std::vector<DX8_CleanupHook*> s_cleanupHooks;
+
+void DX8Wrapper::AddCleanupHook(DX8_CleanupHook *pCleanupHook)
+{
+	if (!pCleanupHook) return;
+	for (size_t i = 0; i < s_cleanupHooks.size(); ++i) {
+		if (s_cleanupHooks[i] == pCleanupHook) return;
+	}
+	s_cleanupHooks.push_back(pCleanupHook);
+}
+
+void DX8Wrapper::RemoveCleanupHook(DX8_CleanupHook *pCleanupHook)
+{
+	if (m_pCleanupHook == pCleanupHook) {
+		m_pCleanupHook = nullptr;
+	}
+	for (auto it = s_cleanupHooks.begin(); it != s_cleanupHooks.end(); ++it) {
+		if (*it == pCleanupHook) {
+			s_cleanupHooks.erase(it);
+			break;
+		}
+	}
+}
+
 #ifdef EXTENDED_STATS
 DX8_Stats	 DX8Wrapper::stats;
 #endif
@@ -663,6 +688,15 @@ bool DX8Wrapper::Init(void * hwnd, bool lite)
 	Invalidate_Cached_Render_States();
 
 	if (!lite) {
+#ifndef _WIN32
+		// GeneralsX @bugfix fbraz3 12/10/2026 Set default DXVK configuration fallback for D3D8 device resets
+		// In D3D8, swapchain resets (such as fullscreen transitions and window resizing)
+		// do not require exhaustive destruction of all D3DPOOL_DEFAULT subresources.
+		// Set countLosableResources=False and forceSamplerTypeSpecConstants=False if not explicitly configured.
+		if (!getenv("DXVK_CONFIG")) {
+			setenv("DXVK_CONFIG", "d3d9.countLosableResources = False; d3d9.forceSamplerTypeSpecConstants = False", 0);
+		}
+#endif
 		// GeneralsX @build BenderAI 10/02/2026 - Platform-specific DLL/SO/DYLIB loading (Phase 5: macOS)
 #ifdef _WIN32
 		D3D8Lib = LoadLibrary("D3D8.DLL");
@@ -734,6 +768,9 @@ void DX8Wrapper::Shutdown()
 		Set_Render_Target ((IDirect3DSurface8 *)nullptr);
 		Release_Device();
 	}
+
+	m_pCleanupHook = nullptr;
+	s_cleanupHooks.clear();
 
 	if (D3DInterface) {
 		D3DInterface->Release();
@@ -1008,8 +1045,17 @@ bool DX8Wrapper::Reset_Device(bool reload_assets)
 			Set_Vertex_Buffer (nullptr,i);
 		}
 		Set_Index_Buffer (nullptr, 0);
+		// GeneralsX @bugfix fbraz3 12/10/2026 Ensure default render targets are restored and custom RTs unbound before reset
+		Set_Render_Target(static_cast<IDirect3DSurface8*>(nullptr));
+
+		// GeneralsX @bugfix fbraz3 12/10/2026 Release pillarbox offscreen surfaces before resetting device
+		Pillarbox_Cleanup();
+
 		if (m_pCleanupHook) {
 			m_pCleanupHook->ReleaseResources();
+		}
+		for (size_t i = 0; i < s_cleanupHooks.size(); ++i) {
+			if (s_cleanupHooks[i]) s_cleanupHooks[i]->ReleaseResources();
 		}
 		DynamicVBAccessClass::_Deinit();
 		DynamicIBAccessClass::_Deinit();
@@ -1037,6 +1083,9 @@ bool DX8Wrapper::Reset_Device(bool reload_assets)
 			if (m_pCleanupHook) {
 				m_pCleanupHook->ReAcquireResources();
 			}
+			for (size_t i = 0; i < s_cleanupHooks.size(); ++i) {
+				if (s_cleanupHooks[i]) s_cleanupHooks[i]->ReAcquireResources();
+			}
 		}
 		Invalidate_Cached_Render_States();
 		Set_Default_Global_Render_States();
@@ -1052,10 +1101,18 @@ void DX8Wrapper::Release_Device()
 {
 	Pillarbox_Cleanup();
 
+	if (m_pCleanupHook) {
+		m_pCleanupHook->ReleaseResources();
+	}
+	for (size_t i = 0; i < s_cleanupHooks.size(); ++i) {
+		if (s_cleanupHooks[i]) s_cleanupHooks[i]->ReleaseResources();
+	}
+
 	if (D3DDevice) {
 
 		for (int a=0;a<MAX_TEXTURE_STAGES;++a)
-		{	//release references to any textures that were used in last rendering call
+		{
+			//release references to any textures that were used in last rendering call
 			DX8CALL(SetTexture(a,nullptr));
 		}
 
@@ -1449,7 +1506,8 @@ bool DX8Wrapper::Set_Render_Device(int dev, int width, int height, int bits, int
 		}
 
 		if (BitDepth==32 && D3DInterface->CheckDeviceType(0,D3DDEVTYPE_HAL,desktop_mode.Format,D3DFMT_A8R8G8B8, TRUE) == D3D_OK)
-		{	//promote 32-bit modes to include destination alpha
+		{
+			//promote 32-bit modes to include destination alpha
 			_PresentParameters.BackBufferFormat = D3DFMT_A8R8G8B8;
 		}
 
@@ -1920,7 +1978,8 @@ bool DX8Wrapper::Find_Color_And_Z_Mode(int resx,int resy,int bitdepth,D3DFORMAT 
 	}
 
 	if (bitdepth==32 && *set_colorbuffer == D3DFMT_X8R8G8B8 && D3DInterface->CheckDeviceType(0,D3DDEVTYPE_HAL,*set_colorbuffer,D3DFMT_A8R8G8B8, TRUE) == D3D_OK)
-	{	//promote 32-bit modes to include destination alpha when supported
+	{
+		//promote 32-bit modes to include destination alpha when supported
 		*set_backbuffer = D3DFMT_A8R8G8B8;
 	}
 
@@ -2473,7 +2532,7 @@ void DX8Wrapper::Draw(
 	// Debug feature to disable triangle drawing...
 	if (!_Is_Triangle_Draw_Enabled()) return;
 
-#ifdef MESH_RENDER_SNAPSHOT_ENABLED
+#ifdef DEBUG_LOGGING
 	if (WW3D::Is_Snapshot_Activated()) {
 		DWORD passes=0;		// GeneralsX @build BenderAI 10/02/2026 - Use DWORD (32-bit) instead of unsigned long (platform-dependent)
 		SNAPSHOT_SAY(("ValidateDevice:"));
@@ -2521,10 +2580,9 @@ void DX8Wrapper::Draw(
 			break;
 		}
 	}
-#endif	// MESH_RENDER_SNAPSHOT_ENABLED
-
 
 	SNAPSHOT_SAY(("DX8 - draw %d polygons (%d vertices)",polygon_count,vertex_count));
+#endif
 
 	if (vertex_count<3) {
 		min_vertex_index=0;
@@ -2697,7 +2755,7 @@ void DX8Wrapper::Apply_Render_State_Changes()
 			if (render_state_changed&mask) {
 				SNAPSHOT_SAY(("DX8 - apply light %d",index));
 				if (render_state.LightEnable[index]) {
-#ifdef MESH_RENDER_SNAPSHOT_ENABLED
+#if defined(DEBUG_CRASHING) || defined(DEBUG_LOGGING)
 					if ( WW3D::Is_Snapshot_Activated() ) {
 						D3DLIGHT8 * light = &(render_state.Lights[index]);
 						static const char * _light_types[] = { "Unknown", "Point","Spot", "Directional" };
@@ -2738,7 +2796,8 @@ void DX8Wrapper::Apply_Render_State_Changes()
 		SNAPSHOT_SAY(("DX8 - apply vb change"));
 		for (i=0;i<MAX_VERTEX_STREAMS;++i) {
 			if (render_state.vertex_buffers[i]) {
-				switch (render_state.vertex_buffer_types[i]) {//->Type()) {
+				switch (render_state.vertex_buffer_types[i]) {
+					//->Type()) {
 				case BUFFER_TYPE_DX8:
 				case BUFFER_TYPE_DYNAMIC_DX8:
 					DX8CALL(SetStreamSource(
@@ -2769,7 +2828,8 @@ void DX8Wrapper::Apply_Render_State_Changes()
 	if (render_state_changed&INDEX_BUFFER_CHANGED) {
 		SNAPSHOT_SAY(("DX8 - apply ib change"));
 		if (render_state.index_buffer) {
-			switch (render_state.index_buffer_type) {//->Type()) {
+			switch (render_state.index_buffer_type) {
+				//->Type()) {
 			case BUFFER_TYPE_DX8:
 			case BUFFER_TYPE_DYNAMIC_DX8:
 				DX8CALL(SetIndices(
@@ -3686,23 +3746,36 @@ void DX8Wrapper::Create_Render_Target
 	DX8_Assert();
 	DX8_RECORD_DX8_CALLS();
 
-	// Use the current display format if format isn't specified
+	// GeneralsX @bugfix fbraz3 10/10/2026 Query display mode and device depth format when format isn't specified
 	if (format==WW3D_FORMAT_UNKNOWN)
 	{
-		*target=nullptr;
-		*depth_buffer=nullptr;
-		return;
-/*		D3DDISPLAYMODE mode;
+		D3DDISPLAYMODE mode;
 		DX8CALL(GetDisplayMode(&mode));
-		format=D3DFormat_To_WW3DFormat(mode.Format);*/
+		format=D3DFormat_To_WW3DFormat(mode.Format);
+	}
+	if (zformat==WW3D_ZFORMAT_UNKNOWN)
+	{
+		zformat = D3DFormat_To_WW3DZFormat(_PresentParameters.AutoDepthStencilFormat);
 	}
 
-	// If render target format isn't supported return null
-	if (!Get_Current_Caps()->Support_Render_To_Texture_Format(format) ||
-		 !Get_Current_Caps()->Support_Depth_Stencil_Format(zformat))
+	// GeneralsX @bugfix Mr. Meeseeks 12/10/2026 If render target color format isn't supported return null
+	if (!Get_Current_Caps()->Support_Render_To_Texture_Format(format))
 	{
-		WWDEBUG_SAY(("DX8Wrapper - Render target with depth format is not supported"));
+		WWDEBUG_SAY(("DX8Wrapper - Render target format is not supported"));
+		*target = nullptr;
+		if (depth_buffer != nullptr) *depth_buffer = nullptr;
 		return;
+	}
+
+	bool can_create_depth = (depth_buffer != nullptr && Get_Current_Caps()->Support_Depth_Stencil_Format(zformat));
+	if (depth_buffer != nullptr && !can_create_depth)
+	{
+		// Fallback to D16 if the current auto depth-stencil format cannot be textured
+		if (Get_Current_Caps()->Support_Depth_Stencil_Format(WW3D_ZFORMAT_D16))
+		{
+			zformat = WW3D_ZFORMAT_D16;
+			can_create_depth = true;
+		}
 	}
 
 	//	Note: We're going to force the width and height to be powers of two and equal
@@ -3739,18 +3812,28 @@ void DX8Wrapper::Create_Render_Target
 
 	*target=tex;
 
-	// attempt to create the depth stencil buffer
-	*depth_buffer=NEW_REF
-	(
-		ZTextureClass,
-		(
-			width,
-			height,
-			zformat,
-			MIP_LEVELS_1,
-			TextureClass::POOL_DEFAULT
-		)
-	);
+	// GeneralsX @bugfix Mr. Meeseeks 12/10/2026 Attempt to create depth stencil buffer only if depth texturing is supported
+	if (depth_buffer != nullptr)
+	{
+		if (can_create_depth)
+		{
+			*depth_buffer=NEW_REF
+			(
+				ZTextureClass,
+				(
+					width,
+					height,
+					zformat,
+					MIP_LEVELS_1,
+					TextureClass::POOL_DEFAULT
+				)
+			);
+		}
+		else
+		{
+			*depth_buffer = nullptr;
+		}
+	}
 }
 
 /*!
@@ -3764,21 +3847,30 @@ void DX8Wrapper::Set_Render_Target_With_Z
 )
 {
 	WWASSERT(texture!=nullptr);
+	if (!texture) return;
 	IDirect3DSurface8 * d3d_surf = texture->Get_D3D_Surface_Level();
 	WWASSERT(d3d_surf != nullptr);
+	if (!d3d_surf) return;
 
 	IDirect3DSurface8* d3d_zbuf=nullptr;
 	if (ztexture!=nullptr)
 	{
-
 		d3d_zbuf=ztexture->Get_D3D_Surface_Level();
-		WWASSERT(d3d_zbuf!=nullptr);
-		Set_Render_Target(d3d_surf,d3d_zbuf);
-		d3d_zbuf->Release();
+		if (d3d_zbuf!=nullptr)
+		{
+			Set_Render_Target(d3d_surf,d3d_zbuf);
+			d3d_zbuf->Release();
+		}
+		else
+		{
+			// GeneralsX @bugfix fbraz3 10/10/2026 Do not attach mismatched default backbuffer depth buffer to custom offscreen RT
+			Set_Render_Target(d3d_surf,false);
+		}
 	}
 	else
 	{
-		Set_Render_Target(d3d_surf,true);
+		// GeneralsX @bugfix fbraz3 10/10/2026 Do not attach mismatched default backbuffer depth buffer to custom offscreen RT
+		Set_Render_Target(d3d_surf,false);
 	}
 	d3d_surf->Release();
 
@@ -4031,16 +4123,22 @@ void DX8Wrapper::Set_Render_Target
 		if (CurrentRenderTarget != nullptr)
 		{
 			CurrentRenderTarget->AddRef ();
-			CurrentDepthBuffer->AddRef();
+			if (CurrentDepthBuffer != nullptr)
+			{
+				CurrentDepthBuffer->AddRef();
+			}
 
 			//
 			//	Switch render targets
 			//
 			DX8CALL(SetRenderTarget (CurrentRenderTarget, CurrentDepthBuffer));
 		}
+		IsRenderToTexture = true;
 	}
-
-	IsRenderToTexture=true;
+	else
+	{
+		IsRenderToTexture = false;
+	}
 }
 
 

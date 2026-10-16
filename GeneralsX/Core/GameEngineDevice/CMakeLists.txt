@@ -38,11 +38,11 @@ set(GAMEENGINEDEVICE_SRC
 #    Include/W3DDevice/GameClient/W3DBridgeBuffer.h
 #    Include/W3DDevice/GameClient/W3DBufferManager.h
 #    Include/W3DDevice/GameClient/W3DCustomScene.h
-#    Include/W3DDevice/GameClient/W3DDebugDisplay.h
-#    Include/W3DDevice/GameClient/W3DDebugIcons.h
-#    Include/W3DDevice/GameClient/W3DDisplay.h
-#    Include/W3DDevice/GameClient/W3DDisplayString.h
-#    Include/W3DDevice/GameClient/W3DDisplayStringManager.h
+    Include/W3DDevice/GameClient/W3DDebugDisplay.h
+    Include/W3DDevice/GameClient/W3DDebugIcons.h
+    Include/W3DDevice/GameClient/W3DDisplay.h
+    Include/W3DDevice/GameClient/W3DDisplayString.h
+    Include/W3DDevice/GameClient/W3DDisplayStringManager.h
 #    Include/W3DDevice/GameClient/W3DDynamicLight.h
 #    Include/W3DDevice/GameClient/W3DFileSystem.h
     Include/W3DDevice/GameClient/W3DGadget.h
@@ -55,6 +55,8 @@ set(GAMEENGINEDEVICE_SRC
 #    Include/W3DDevice/GameClient/W3DMirror.h
     Include/W3DDevice/GameClient/W3DMouse.h
     Include/W3DDevice/GameClient/W3DParticleSys.h
+    Include/W3DDevice/GameClient/W3DPostProcess.h
+    Include/W3DDevice/GameClient/W3DPostProcessShaders.h
 #    Include/W3DDevice/GameClient/W3DPoly.h
     Include/W3DDevice/GameClient/W3DProfilerFrameCapture.h
 #    Include/W3DDevice/GameClient/W3DProjectedShadow.h
@@ -147,17 +149,18 @@ set(GAMEENGINEDEVICE_SRC
 #    Source/W3DDevice/GameClient/W3DAssetManagerExposed.cpp
 #    Source/W3DDevice/GameClient/W3DBibBuffer.cpp
 #    Source/W3DDevice/GameClient/W3DBridgeBuffer.cpp
-#    Source/W3DDevice/GameClient/W3DDebugDisplay.cpp
-#    Source/W3DDevice/GameClient/W3DDebugIcons.cpp
-#    Source/W3DDevice/GameClient/W3DDisplay.cpp
-#    Source/W3DDevice/GameClient/W3DDisplayString.cpp
-#    Source/W3DDevice/GameClient/W3DDisplayStringManager.cpp
+    Source/W3DDevice/GameClient/W3DDebugDisplay.cpp
+    Source/W3DDevice/GameClient/W3DDebugIcons.cpp
+    Source/W3DDevice/GameClient/W3DDisplay.cpp
+    Source/W3DDevice/GameClient/W3DDisplayString.cpp
+    Source/W3DDevice/GameClient/W3DDisplayStringManager.cpp
 #    Source/W3DDevice/GameClient/W3DDynamicLight.cpp
 #    Source/W3DDevice/GameClient/W3DFileSystem.cpp
 #    Source/W3DDevice/GameClient/W3DGameClient.cpp
 #    Source/W3DDevice/GameClient/W3DInGameUI.cpp
     Source/W3DDevice/GameClient/W3DMouse.cpp
     Source/W3DDevice/GameClient/W3DParticleSys.cpp
+    Source/W3DDevice/GameClient/W3DPostProcess.cpp
 #    Source/W3DDevice/GameClient/W3DPoly.cpp
     Source/W3DDevice/GameClient/W3DProfilerFrameCapture.cpp
     Source/W3DDevice/GameClient/W3DPropBuffer.cpp
@@ -198,14 +201,22 @@ if(WIN32)
     list(APPEND GAMEENGINEDEVICE_SRC
         Include/MilesAudioDevice/MilesAudioManager.h
         Include/VideoDevice/Bink/BinkVideoPlayer.h
+        Include/Win32Device/Common/Win32LANInterface.h
         Include/Win32Device/Common/Win32LocalFile.h
         Include/Win32Device/Common/Win32LocalFileSystem.h
         Source/MilesAudioDevice/MilesAudioManager.cpp
         Source/VideoDevice/Bink/BinkVideoPlayer.cpp
+        Source/Win32Device/Common/Win32LANInterface.cpp
         Source/Win32Device/Common/Win32LocalFile.cpp
         Source/Win32Device/Common/Win32LocalFileSystem.cpp
 #        Source/Win32Device/Common/Win32OSDisplay.cpp
 #        Source/Win32Device/GameClient/Win32DIKeyboard.cpp
+    )
+else()
+    # GeneralsX @refactor Mr. Meesseeks 17/09/2026 POSIX network interface implementation
+    list(APPEND GAMEENGINEDEVICE_SRC
+        Include/StdDevice/Common/StdLANInterface.h
+        Source/StdDevice/Common/StdLANInterface.cpp
     )
 endif()
 
@@ -247,9 +258,9 @@ target_link_libraries(corei_gameenginedevice_public INTERFACE
 
 if(WIN32)
     target_link_libraries(corei_gameenginedevice_public INTERFACE
-        binkstub
+        deps_bink
         d3d8lib
-        milesstub
+        deps_miles
     )
 endif()
 

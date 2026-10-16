@@ -674,6 +674,8 @@ public:
 	void remove( AsciiString groupName, Bool skipPending = FALSE );// remove the animation from the current or pending groups.
 	TransitionGroup *getNewGroup( AsciiString name );
 	void cloneWindowTransitions( AsciiString sourceWindowName, AsciiString targetWindowName, Int buttonFlashDelayOffset = 0 );
+	// GeneralsX @feature fbraz3 18/09/2026 Check if transition group exists
+	Bool hasGroup( AsciiString groupName ) { return findGroup(groupName) != nullptr; }
 private:
 	TransitionGroup *findGroup( AsciiString groupName );
 	typedef std::list<TransitionGroup *> TransitionGroupList;
