@@ -1,7 +1,7 @@
 # Echelon — Instructions for AI Coding Agents
 
 ## What I Am
-Echelon is a fork of GeneralsX that combines the Command & Conquer: Generals and Zero Hour engine branches behind one launcher for **Linux and macOS**. It preserves the GeneralsX cross-platform stack (SDL3 + DXVK + OpenAL + 64-bit) and keeps the engine in the tracked `GeneralsX/` directory close to upstream for regular reviewed merges.
+Echelon is a fork of GeneralsX that combines the Command & Conquer: Generals and Zero Hour engine branches behind one launcher for **Linux and macOS**. It preserves the GeneralsX cross-platform stack (SDL3 + DXVK + MiniAudio + 64-bit) and keeps the engine in the tracked `GeneralsX/` directory close to upstream for regular reviewed merges.
 
 ## Key Entry Points
 - `GeneralsX/GeneralsMD/Code/Main/WinMain.cpp`
@@ -18,7 +18,7 @@ Echelon is a fork of GeneralsX that combines the Command & Conquer: Generals and
 |---------|---------------------|------------------------------|
 | Graphics| DXVK                | DirectX 8 (d3d8.dll)         |
 | Windowing| SDL3              | Win32 API                    |
-| Audio   | OpenAL (MiniAudio WIP)| Miles Sound System           |
+| Audio   | MiniAudio (per upstream #358)| Miles Sound System           |
 | Video   | FFmpeg              | Bink Video (intro/videos)    |
 | Platform| SDL3 + libc         | Win32 POSIX calls            |
 
@@ -28,7 +28,7 @@ Echelon is a fork of GeneralsX that combines the Command & Conquer: Generals and
 1. **Single codebase** – Linux and macOS build from same source
 2. **SDL3 everywhere** – No native platform calls in game code
 3. **DXVK everywhere** – DX8 → Vulkan translation on all platforms
-4. **OpenAL / MiniAudio Parity** – Cross-platform audio stack. Implementations and bug fixes in one MUST be replicated in the other to maintain strict feature parity.
+4. **Audio follows upstream** – Owner directive (16/10/2026): upstream is never disputed on audio. The upstream MiniAudio unification (#358) is the audio stack; the former OpenAL backend and the OpenAL/MiniAudio parity requirement are retired.
 5. **64-bit native** – Linux x86_64 and macOS ARM64 (32-bit VC6 is upstream reference only)
 6. **Retail compatibility** – Original replays and mods must work
 7. **Determinism** – Rendering/audio changes must not affect gameplay logic
@@ -84,7 +84,7 @@ Scripts and build guides inside `GeneralsX/` retain upstream assumptions and ser
 
 ## Backport Rules
 **Backport to Generals when:**
-- Change is platform/backend code (SDL3, DXVK, OpenAL/MiniAudio) or a general bugfix/improvement
+- Change is platform/backend code (SDL3, DXVK, MiniAudio) or a general bugfix/improvement
 - Change is in shared Core libraries
 - Change is low-risk and clearly applicable
 
