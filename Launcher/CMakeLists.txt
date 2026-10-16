@@ -1,3 +1,6 @@
+# Echelon @build Codex 16/10/2026 Layered Core target comes first; the legacy monolith targets below stay untouched.
+add_subdirectory(Core)
+
 # Echelon @build Codex 12/08/2026 Universal SDL3 launcher host for both engine modules.
 add_executable(echelon_launcher
     EngineSession.cpp
