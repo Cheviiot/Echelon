@@ -51,6 +51,7 @@ add_feature_info(DeepCRC RTS_BUILD_OPTION_DEEP_CRC "Enable deep CRC snapshots on
 add_feature_info(UniversalLauncher RTS_BUILD_UNIVERSAL_LAUNCHER "Build one launcher with both engine modules")
 add_feature_info(SDL3Windowing SAGE_USE_SDL3 "Using SDL3 for windowing (Linux)")
 add_feature_info(OpenALAudio SAGE_USE_OPENAL "Using OpenAL for audio (Linux)")
+add_feature_info(MiniAudioAudio SAGE_USE_MINIAUDIO "Using MiniAudio for audio (Linux/macOS)")
 add_feature_info(UpdateCheck SAGE_UPDATE_CHECK "In-game update check via GitHub Releases API")
 add_feature_info(SagePatch RTS_BUILD_OPTION_SAGE_PATCH "Build SagePatch QoL extras (macOS)")
 
@@ -137,6 +138,18 @@ endif()
 if(SAGE_UPDATE_CHECK)
     target_compile_definitions(core_config INTERFACE SAGE_UPDATE_CHECK)
     message(STATUS "In-game update checker enabled")
+endif()
+
+# GeneralsX @feature GeneralsOnline NGMP protocol option
+if(IS_VS6_BUILD)
+    option(SAGE_USE_NGMP "Use NGMP (GeneralsOnline) multiplayer protocol" OFF)
+else()
+    option(SAGE_USE_NGMP "Use NGMP (GeneralsOnline) multiplayer protocol" ON)
+endif()
+add_feature_info(NGMPProtocol SAGE_USE_NGMP "Using NGMP multiplayer protocol (GeneralsOnline)")
+
+if(SAGE_USE_NGMP)
+    target_compile_definitions(core_config INTERFACE SAGE_USE_NGMP)
 endif()
 
 if(SAGE_USE_GLM)

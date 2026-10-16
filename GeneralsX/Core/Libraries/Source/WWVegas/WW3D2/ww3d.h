@@ -46,6 +46,7 @@ class		SceneClass;
 class		CameraClass;
 class		ShaderClass;
 class		DX8Wrapper;
+class		IRenderBackend;
 
 struct	RenderStatistics;
 class		FrameGrabClass;
@@ -58,9 +59,11 @@ class		LightEnvironmentClass;
 class		MaterialPassClass;
 class 	StaticSortListClass;
 
-#define MESH_RENDER_SNAPSHOT_ENABLED
-#define SNAPSHOT_SAY(x) if (WW3D::Is_Snapshot_Activated()) { WWDEBUG_SAY(x); }
-//#define SNAPSHOT_SAY(x)
+#ifdef DEBUG_LOGGING
+	#define SNAPSHOT_SAY(x) if (WW3D::Is_Snapshot_Activated()) { WWDEBUG_SAY(x); }
+#else
+	#define SNAPSHOT_SAY(x)
+#endif
 
 /**
 ** WW3D
@@ -110,6 +113,10 @@ public:
 	static WW3DErrorType		Init(void * hwnd, char *defaultpal = nullptr, bool lite = false);
 	static WW3DErrorType		Shutdown();
 	static bool					Is_Initted()								{ return IsInitted; }
+
+	// The active rendering backend.
+	// Created in Init and destroyed in Shutdown, so it is never null in between.
+	static IRenderBackend *	Get_Render_Backend()						{ return RenderBackend; }
 
 	static int					Get_Render_Device_Count();
 	static const char *		Get_Render_Device_Name(int device_index);
@@ -178,6 +185,8 @@ public:
 
 	// Total sync time in milliseconds. Advances in full logic time steps only.
 	static unsigned int		Get_Sync_Time() { return SyncTime; }
+
+	static unsigned int		Get_Previous_Sync_Time() { return PreviousSyncTime; }
 
 	// Current sync frame time in milliseconds. Can be zero when the logic has not stepped forward in the current render update.
 	static unsigned int		Get_Sync_Frame_Time() { return SyncTime - PreviousSyncTime; }
@@ -369,6 +378,8 @@ private:
 
 	static float						PixelCenterX;
 	static float						PixelCenterY;
+
+	static IRenderBackend *		RenderBackend;
 
 	static bool							IsInitted;
 	static bool							IsRendering;

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.28)
 
 # Echelon @build Codex 05/09/2026 Support both a standalone checkout and the parent product build.
 set(GENERALSX_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -40,6 +40,10 @@ if (GENERALSX_BINARY_DIR STREQUAL GENERALSX_SOURCE_DIR)
     message(FATAL_ERROR "Building in-source is not supported! Create a build dir and remove ${GENERALSX_SOURCE_DIR}/CMakeCache.txt")
 endif()
 
+# Define VCPKG feature before the project block
+# since they need to be initialized before the toolchain is
+include(cmake/config-vcpkg.cmake)
+
 # Top level project, doesn't really affect anything.
 project(genzh LANGUAGES C CXX)
 
@@ -72,12 +76,6 @@ if(MINGW)
     include(cmake/mingw.cmake)
     include(cmake/reactos-atl.cmake)
     include(cmake/widl.cmake)
-endif()
-
-# Find/Add build dependencies and stubs shared by all projects
-if((WIN32 OR "${CMAKE_SYSTEM}" MATCHES "Windows") AND ${CMAKE_SIZEOF_VOID_P} EQUAL 4)
-    include(cmake/miles.cmake)
-    include(cmake/bink.cmake)
 endif()
 
 # SDL3 windowing/input for Linux builds (Phase 1)
@@ -119,6 +117,9 @@ include(cmake/miniaudio.cmake)
 # curl.cmake is self-guarded with if(SAGE_UPDATE_CHECK), so always safe to include.
 include(cmake/curl.cmake)
 
+# GeneralsX @feature GeneralsOnline NGMP protocol dependency setup
+include(cmake/ngmp.cmake)
+
 # GeneralsX @feature fbraz 03/05/2026 Phase 4: Deterministic math library integration
 # gamemath.cmake integrates fdlibm-based GameMath for cross-platform replay validation.
 # Upstream reference: Okladnoj, PR #2670
@@ -131,12 +132,20 @@ if (IS_VS6_BUILD)
     # If there is a desire to make this work, then a fixed max sdk needs to be created.
     add_subdirectory(Dependencies/MaxSDK)
 endif()
-add_subdirectory(Dependencies/Utility)
 
-# To be removed when abandoning VC6
-if (IS_VS6_BUILD)
-    include_directories(Dependencies/Utility)
-    add_compile_options(/FIUtility/CppMacros.h)
+add_subdirectory(Dependencies/Precompiled)
+add_subdirectory(Dependencies/Utility)
+add_subdirectory(Dependencies/Bink)
+add_subdirectory(Dependencies/Miles)
+if (WIN32)
+    add_subdirectory(Dependencies/DbgHelp)
+    add_subdirectory(Dependencies/Usp10)
+else()
+    add_library(deps_dbghelp INTERFACE)
+    target_include_directories(deps_dbghelp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/DbgHelp)
+    target_sources(deps_dbghelp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/DbgHelp/DbgHelpGuard.cpp)
+    add_library(deps_usp10 INTERFACE)
+    target_include_directories(deps_usp10 INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/Usp10)
 endif()
 
 add_subdirectory(resources)

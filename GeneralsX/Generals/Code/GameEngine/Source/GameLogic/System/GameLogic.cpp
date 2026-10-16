@@ -242,28 +242,10 @@ void setFPMode()
 	#endif
 }
 
-//-------------------------------------------------------------------------------------------------
-const char* toString(GameMode mode)
+// ------------------------------------------------------------------------------------------------
+UnsignedShort GameLogic::getSuperweaponRestriction() const
 {
-	switch (mode)
-	{
-		case GAME_SINGLE_PLAYER:
-			return "GAME_SINGLE_PLAYER";
-		case GAME_LAN:
-			return "GAME_LAN";
-		case GAME_SKIRMISH:
-			return "GAME_SKIRMISH";
-		case GAME_REPLAY:
-			return "GAME_REPLAY";
-		case GAME_SHELL:
-			return "GAME_SHELL";
-		case GAME_INTERNET:
-			return "GAME_INTERNET";
-		case GAME_NONE:
-			return "GAME_NONE";
-		default:
-			return "GAME_UNKNOWN";
-	}
+  return TheGameInfo ? TheGameInfo->getSuperweaponRestriction() : 0;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -327,16 +309,24 @@ GameLogic::GameLogic()
 	m_loadingMap = FALSE;
 	m_loadingSave = FALSE;
 	m_clearingGameData = FALSE;
+
+#if RTS_GENERALS && defined(_MSC_VER) && _MSC_VER < 1300
+	m_onUnitProducedZeroInit = false;
+#endif
 }
 
 //-------------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------------
-Bool GameLogic::isInSinglePlayerGame()
+Bool GameLogic::isInSinglePlayerGame() const
 {
-	return (m_gameMode == GAME_SINGLE_PLAYER ||
-		(TheRecorder && TheRecorder->isPlaybackMode() && TheRecorder->getGameMode() == GAME_SINGLE_PLAYER));
-}
+	if (rts::isSinglePlayerGame(m_gameMode))
+		return true;
 
+	if (TheRecorder && TheRecorder->isPlaybackMode() && rts::isSinglePlayerGame(TheRecorder->getGameMode()))
+		return true;
+
+	return false;
+}
 
 //-------------------------------------------------------------------------------------------------
 /** Destroy all objects immediately */
@@ -1364,7 +1354,8 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 			d.setInt(TheKey_multiplayerStartIndex, slot->getStartPos());
 //			d.setBool(TheKey_multiplayerIsLocal, slot->isLocalPlayer());
 //			d.setBool(TheKey_multiplayerIsLocal, slot->getIP() == game->getLocalIP());
-			d.setBool(TheKey_multiplayerIsLocal, slot->isHuman() && (slot->getName().compare(TheGameInfo->getSlot(TheGameInfo->getLocalSlotNum())->getName().str()) == 0));
+			const Bool isLocalPlayer = slot->isHuman() && i == TheGameInfo->getLocalSlotNum();
+			d.setBool(TheKey_multiplayerIsLocal, isLocalPlayer);
 
 /*
 			if (slot->getIP() == game->getLocalIP())
@@ -1385,9 +1376,8 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 				}
 			}
 
-			AsciiString slotNameAscii;
-			slotNameAscii.translate(slot->getName());
-			if (slot->isHuman() && TheGameInfo->getSlotNum(slotNameAscii) == TheGameInfo->getLocalSlotNum()) {
+			if (isLocalPlayer)
+			{
 				localSlot = i;
 			}
 			TheSidesList->addSide(&d);
@@ -2251,7 +2241,7 @@ void GameLogic::loadMapINI( AsciiString mapName )
 
 
 	char fullFledgeFilename[_MAX_PATH];
-	snprintf(fullFledgeFilename, ARRAY_SIZE(fullFledgeFilename), "%s\\map.ini", filename);
+	snprintf(fullFledgeFilename, ARRAY_SIZE(fullFledgeFilename), "%s/map.ini", filename);
 	if (TheFileSystem->doesFileExist(fullFledgeFilename)) {
 		DEBUG_LOG(("Loading map.ini"));
 		INI ini;
@@ -2261,7 +2251,7 @@ void GameLogic::loadMapINI( AsciiString mapName )
 	// TheSuperHackers @todo Implement ini load directory for map folder.
 	// Requires adjustments in map transfer.
 
-	snprintf(fullFledgeFilename, ARRAY_SIZE(fullFledgeFilename), "%s\\solo.ini", filename);
+	snprintf(fullFledgeFilename, ARRAY_SIZE(fullFledgeFilename), "%s/solo.ini", filename);
 	if (TheFileSystem->doesFileExist(fullFledgeFilename)) {
 		DEBUG_LOG(("Loading solo.ini"));
 		INI ini;
@@ -3155,8 +3145,8 @@ static void unitTimings()
 		if (g_UT_curThing->getName()==SINGLE_UNIT) {
 			return;
 		}
-		while (g_UT_curThing->friend_getNextTemplate()
-			&& g_UT_curThing->friend_getNextTemplate()->getName()!=SINGLE_UNIT)
+		while (g_UT_curThing->friend_getNextTemplate() &&
+			g_UT_curThing->friend_getNextTemplate()->getName()!=SINGLE_UNIT)
 			g_UT_curThing = g_UT_curThing->friend_getNextTemplate();
 
 	}

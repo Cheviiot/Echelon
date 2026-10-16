@@ -4,9 +4,9 @@
 - Source remote: `upstream` (`fbraz3/GeneralsX`)
 - Product branch: `origin/main`
 - Pristine mirror branch: `origin/upstream` (original commits and original root layout)
-- Integrated revision: `3c2ed4589599beb631ea6da602c8ac95abf6bcdc`
-- Previous baseline: `70cccbdc34985bf90305c7aaf1ab2e962f3cde2b`
-- Incoming commits: 84 (Beta 18 plus the following documentation commit)
+- Integrated revision: `670b082cda303f8b84e31b75f11506ec9be6a8eb`
+- Previous baseline: `3c2ed4589599beb631ea6da602c8ac95abf6bcdc`
+- Incoming commits: 244 (reviewed on `codex/upstream-sync-2026-10-16`)
 - Prefix: `GeneralsX/`, an ordinary directory tracked by the Echelon repository
 - Development checkpoint: `984ab6c91`
 - Upstream merge: `4b7395027`
